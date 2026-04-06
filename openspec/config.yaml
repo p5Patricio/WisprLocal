@@ -1,0 +1,62 @@
+schema: spec-driven
+
+context: |
+  Tech stack: Python 3.12.7, faster-whisper 1.2.1 (large-v3), PyTorch 2.5.1+cu121
+  Platform: Windows 10/11 only, NVIDIA RTX GPU (CUDA 12.1)
+  Architecture: Single-script MVP (mvp_local.py) — refactor target
+  Dependencies: pynput 1.8.1, pystray 0.19.5, sounddevice 0.5.5, pyperclip 1.11.0
+  Venv: .venv (Python 3.12.7), activate via .venv/Scripts/activate
+  Run: .venv/Scripts/pythonw.exe mvp_local.py
+
+strict_tdd: false
+
+testing:
+  strict_tdd: false
+  reason: No test runner detected
+  runner:
+    available: false
+    framework: none
+    command: null
+  layers:
+    unit:
+      available: false
+    integration:
+      available: false
+    e2e:
+      available: false
+  coverage:
+    available: false
+  quality:
+    linter:
+      available: false
+    type_checker:
+      available: false
+    formatter:
+      available: false
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Identify affected modules since project will be restructured
+    - Consider Windows-only constraints (winsound, pynput, pystray)
+  specs:
+    - Use Given/When/Then format for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Consider GPU/VRAM constraints in performance specs
+  design:
+    - Include module decomposition diagrams
+    - Document architecture decisions with rationale
+    - Prefer flat structure over deep nesting for a CLI tool
+  tasks:
+    - Group tasks by phase (infrastructure, implementation, testing)
+    - Use hierarchical numbering (1.1, 1.2, etc.)
+    - Keep tasks small enough to complete in one session
+  apply:
+    - Always use .venv/Scripts/python.exe, never system python
+    - Follow existing code style (no type hints currently)
+    - Test manually on Windows after each major change
+  verify:
+    - No automated test runner — verification is manual + code review
+    - Check GPU/VRAM behavior after model load/unload changes
+  archive:
+    - Warn before merging destructive deltas (large removals)
