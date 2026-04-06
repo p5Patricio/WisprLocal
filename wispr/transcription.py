@@ -10,7 +10,6 @@ from faster_whisper import WhisperModel
 
 from wispr.state import AppState
 
-_PROMPT_BILINGUE = "Nota técnica. Testing code, PRs, backend logs. Spanglish mode."
 logger = logging.getLogger(__name__)
 
 
@@ -56,7 +55,12 @@ def transcription_worker(
 ) -> None:
     """Worker daemon: acumula chunks de audio y transcribe al recibir sentinel None."""
     sample_rate: int = config["audio"]["sample_rate"]
-    min_frames = int(sample_rate * 0.3)
+    transcription_cfg = config["transcription"]
+    min_duration: float = transcription_cfg["min_duration"]
+    min_frames = int(sample_rate * min_duration)
+    language: str | None = transcription_cfg["language"] or None
+    prompt: str = transcription_cfg["prompt"]
+    beam_size: int = transcription_cfg["beam_size"]
 
     buffer: list = []
     while True:
@@ -74,10 +78,10 @@ def transcription_worker(
                     try:
                         segments, _ = state.model.transcribe(
                             audio_np,
-                            language=None,
+                            language=language,
                             task="transcribe",
-                            beam_size=1,
-                            initial_prompt=_PROMPT_BILINGUE,
+                            beam_size=beam_size,
+                            initial_prompt=prompt,
                         )
                         text = "".join(seg.text for seg in segments).strip()
                         if text:

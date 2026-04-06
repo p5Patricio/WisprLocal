@@ -1,0 +1,50 @@
+# WisprLocal — Configuración
+# Editá este archivo para personalizar la herramienta.
+# Los cambios se aplican al reiniciar la aplicación.
+
+[model]
+# Modelo de Whisper a usar. Opciones: tiny, base, small, medium, large-v2, large-v3
+name = "large-v3"
+# Dispositivo de cómputo. Opciones: "cuda" (GPU NVIDIA), "cpu"
+device = "cuda"
+# Tipo de cómputo. Opciones: "float16", "int8_float16", "int8"
+# float16 = máxima calidad, int8_float16 = balance calidad/VRAM, int8 = mínima VRAM
+compute_type = "int8_float16"
+
+[audio]
+# Frecuencia de muestreo en Hz. No cambiar salvo que tengas problemas de audio.
+sample_rate = 16000
+# Canales de audio (1 = mono, recomendado)
+channels = 1
+# Tipo de dato del audio interno
+dtype = "float32"
+
+[hotkeys]
+# Tecla para Push-to-Talk (mantener presionada mientras hablás)
+# Opciones comunes: "caps_lock", "f9", "f10", "f11", "f12", "scroll_lock"
+ptt = "caps_lock"
+# Combo para Toggle (presionar para iniciar, volver a presionar para detener)
+# Formato: lista de teclas. Ejemplo: ["ctrl", "f10"] o ["alt", "shift"]
+toggle = ["alt", "shift"]
+# (Opcional) Tecla para cargar/descargar el modelo manualmente. Dejar vacío para desactivar.
+load_model_key = ""
+
+[overlay]
+# Mostrar indicador visual de grabación en pantalla
+enabled = true
+# Posición del indicador. Opciones: "bottom-right", "bottom-left", "top-right", "top-left"
+position = "bottom-right"
+# Opacidad del indicador (0.1 = casi invisible, 1.0 = sólido)
+opacity = 0.85
+# Tamaño de la fuente del indicador
+font_size = 14
+
+[transcription]
+# Idioma de transcripción. "" = detección automática (recomendado para Spanglish)
+language = ""
+# Prompt para guiar la transcripción bilingüe
+prompt = "Nota técnica. Testing code, PRs, backend logs. Spanglish mode."
+# Mínimo de segundos de audio para transcribir (evita transcribir ruido)
+min_duration = 0.3
+# Tamaño del beam para la transcripción (1 = más rápido, más = más preciso)
+beam_size = 1

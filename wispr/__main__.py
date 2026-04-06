@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 
+from wispr import config as config_module
 from wispr import sounds
 from wispr.audio import start_stream, stop_stream
 from wispr.hotkeys import start_listener
@@ -14,6 +16,8 @@ from wispr.state import AppState
 from wispr.transcription import load_model, transcription_worker, unload_model
 from wispr.tray import start_tray
 
+log = logging.getLogger(__name__)
+
 
 def main() -> None:
     logging.basicConfig(
@@ -21,15 +25,19 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
-    # Defaults hardcodeados — configuración real viene en Fase 2
-    config = {
-        "model": {
-            "name": "large-v3",
-            "device": "cuda",
-            "compute_type": "int8_float16",
-        },
-        "audio": {"sample_rate": 16000},
-    }
+    try:
+        cfg = config_module.load_config()
+    except ValueError as exc:
+        log.error("Configuración inválida: %s", exc)
+        sys.exit(1)
+
+    log.info(
+        "WisprLocal iniciando... PTT: %s | Toggle: %s",
+        cfg["hotkeys"]["ptt"],
+        cfg["hotkeys"]["toggle"],
+    )
+
+    config = cfg
 
     state = AppState()
     overlay = RecordingOverlay(config)
