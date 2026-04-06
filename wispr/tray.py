@@ -21,12 +21,15 @@ def _create_image(color: str) -> Image.Image:
 
 
 def _update_tray_icon(icon: pystray.Icon, state: AppState) -> None:
-    if state.model is not None:
+    if state.is_loading:
+        icon.icon = _create_image("yellow")
+        icon.title = "WisprLocal \u2014 Cargando modelo..."
+    elif state.model is not None:
         icon.icon = _create_image("green")
-        icon.title = "Wispr Local - Listo"
+        icon.title = "WisprLocal \u2014 Listo | PTT: CapsLock"
     else:
         icon.icon = _create_image("gray")
-        icon.title = "Wispr Local - Sin modelo (VRAM libre)"
+        icon.title = "WisprLocal \u2014 Sin modelo (clic derecho para cargar)"
 
 
 def start_tray(
@@ -38,7 +41,7 @@ def start_tray(
 ) -> None:
     """Crea el icono de bandeja y bloquea el main thread hasta que se cierra."""
 
-    icon = pystray.Icon("Wispr", _create_image("gray"), "Wispr Local - Sin modelo")
+    icon = pystray.Icon("Wispr", _create_image("gray"), "WisprLocal \u2014 Sin modelo (clic derecho para cargar)")
 
     def _load(_icon, _item):
         on_load()

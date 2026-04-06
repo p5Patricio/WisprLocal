@@ -13,14 +13,21 @@ from wispr.state import AppState
 logger = logging.getLogger(__name__)
 
 
-def load_model(state: AppState, config: dict, sounds) -> None:
-    """Carga WhisperModel en GPU y avisa via sounds.play_ready()."""
+def load_model(state: AppState, config: dict, sounds, overlay=None) -> None:
+    """Carga WhisperModel en GPU y avisa via sounds.play_ready().
+
+    overlay: instancia de RecordingOverlay (opcional). Si se provee, muestra
+    el estado "loading" durante la carga y lo oculta al terminar.
+    """
     if state.model is not None or state.is_loading:
         return
 
     state.is_loading = True
     model_cfg = config["model"]
     logger.info("Cargando modelo %s en %s...", model_cfg["name"], model_cfg["device"])
+
+    if overlay is not None:
+        overlay.show_loading()
 
     try:
         model = WhisperModel(
@@ -36,6 +43,8 @@ def load_model(state: AppState, config: dict, sounds) -> None:
         sounds.play_error()
     finally:
         state.is_loading = False
+        if overlay is not None:
+            overlay.hide()
 
 
 def unload_model(state: AppState) -> None:

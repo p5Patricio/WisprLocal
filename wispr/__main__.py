@@ -53,7 +53,7 @@ def main() -> None:
     # 2. Model loader daemon (carga automática al arrancar)
     loader = threading.Thread(
         target=load_model,
-        args=(state, config, sounds),
+        args=(state, config, sounds, overlay),
         daemon=True,
     )
     loader.start()
@@ -71,7 +71,7 @@ def main() -> None:
             config,
             on_load=lambda: threading.Thread(
                 target=load_model,
-                args=(state, config, sounds),
+                args=(state, config, sounds, overlay),
                 daemon=True,
             ).start(),
             on_unload=lambda: unload_model(state),
