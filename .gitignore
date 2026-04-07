@@ -45,3 +45,12 @@ venv.bak/
 # OS files
 .DS_Store
 Thumbs.db
+
+# WisprLocal — archivos generados o locales
+lanzador.vbs
+config.toml
+*.lnk
+
+# SDD / agentes
+openspec/
+.atl/

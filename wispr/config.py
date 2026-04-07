@@ -22,7 +22,7 @@ DEFAULTS = {
     },
     "hotkeys": {
         "ptt": "caps_lock",
-        "toggle": ["alt", "shift"],
+        "toggle": "f10",
         "load_model_key": "",
     },
     "overlay": {
@@ -65,9 +65,9 @@ dtype = "float32"
 # Tecla para Push-to-Talk (mantener presionada mientras hablás)
 # Opciones comunes: "caps_lock", "f9", "f10", "f11", "f12", "scroll_lock"
 ptt = "caps_lock"
-# Combo para Toggle (presionar para iniciar, volver a presionar para detener)
-# Formato: lista de teclas. Ejemplo: ["ctrl", "f10"] o ["alt", "shift"]
-toggle = ["alt", "shift"]
+# Tecla para Toggle (presionar para iniciar grabación, volver a presionar para detener)
+# Opciones comunes: "f10", "f11", "f12", "scroll_lock", "pause"
+toggle = "f10"
 # (Opcional) Tecla para cargar/descargar el modelo manualmente. Dejar vacío para desactivar.
 load_model_key = ""
 
@@ -126,18 +126,24 @@ def _validate(config: dict) -> None:
             f"overlay.opacity debe estar entre 0.1 y 1.0, se recibió: {opacity}"
         )
 
-    if not isinstance(config["hotkeys"]["ptt"], str) or not config["hotkeys"]["ptt"]:
+    if not isinstance(config["hotkeys"]["ptt"], str) or not config["hotkeys"]["ptt"].strip():
         raise ValueError("hotkeys.ptt debe ser un string no vacío")
 
-    if not isinstance(config["hotkeys"]["toggle"], list):
-        raise ValueError("hotkeys.toggle debe ser una lista de strings")
-
-    # Warn on dangerous combos
-    toggle = [k.lower() for k in config["hotkeys"]["toggle"]]
-    if set(toggle) == {"win", "l"}:
-        log.warning(
-            "hotkeys.toggle = ['win', 'l'] conflicta con el bloqueo de pantalla de Windows"
-        )
+    toggle = config["hotkeys"]["toggle"]
+    if isinstance(toggle, list):
+        if not toggle:
+            raise ValueError("hotkeys.toggle no puede ser una lista vacía")
+        for k in toggle:
+            if not isinstance(k, str):
+                raise ValueError(f"hotkeys.toggle debe contener strings, se recibió: {type(k)}")
+        # Warn on dangerous combos
+        if set(k.lower() for k in toggle) == {"win", "l"}:
+            log.warning("hotkeys.toggle = ['win', 'l'] conflicta con el bloqueo de pantalla de Windows")
+    elif isinstance(toggle, str):
+        if not toggle.strip():
+            raise ValueError("hotkeys.toggle debe ser un string no vacío")
+    else:
+        raise ValueError("hotkeys.toggle debe ser un string o una lista de strings")
 
 
 def _write_default_config(path: pathlib.Path) -> None:

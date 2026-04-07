@@ -15,6 +15,8 @@ class AppState:
     toggle_active: bool = False
     model: Any = None
     is_loading: bool = False
+    load_model_requested: bool = False
+    unload_model_requested: bool = False
     audio_queue: queue.Queue = field(default_factory=queue.Queue)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
