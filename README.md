@@ -3,9 +3,9 @@
 Dictado por voz local, sin nube, bilingüe español/inglés. Transcribe con Whisper en tu GPU y pega el texto donde estés escribiendo.
 
 ![Python](https://img.shields.io/badge/python-3.12+-blue)
-![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Status](https://img.shields.io/badge/status-Fase%201%20%E2%9C%85-brightgreen)
+![Status](https://img.shields.io/badge/status-Fase%202%20%E2%9C%85-brightgreen)
 
 ---
 
@@ -168,8 +168,8 @@ Todos los threads se comunican a través de `AppState` (thread-safe) y `audio_qu
 
 ## Roadmap
 
-- **Fase 1** ✅ — Reliability & Thread Safety (listo)
-- **Fase 2** 🔲 — Cross-platform (Linux / macOS)
+- **Fase 1** ✅ — Reliability & Thread Safety
+- **Fase 2** ✅ — Cross-platform (Windows / Linux / macOS)
 - **Fase 3** 🔲 — GUI Installer + Branding profesional
 
 ---
