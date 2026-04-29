@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import pathlib
+import sys
 import threading
 import tkinter as tk
 from typing import Callable
@@ -14,12 +15,18 @@ from wispr.state import AppState
 
 logger = logging.getLogger(__name__)
 
-_ASSETS_DIR = pathlib.Path(__file__).parent.parent / "assets" / "icons"
+
+def _assets_dir() -> pathlib.Path:
+    """Devuelve el directorio de íconos, compatible con PyInstaller y desarrollo."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        # PyInstaller bundle (onedir — _MEIPASS apunta a _internal/)
+        return pathlib.Path(sys._MEIPASS) / "assets" / "icons"
+    return pathlib.Path(__file__).parent.parent / "assets" / "icons"
 
 
 def _load_icon(name: str, fallback_color: str) -> Image.Image:
     """Carga un ícono desde *assets/icons/* o genera un cuadrado de fallback."""
-    path = _ASSETS_DIR / name
+    path = _assets_dir() / name
     if path.exists():
         return Image.open(path).convert("RGBA")
     image = Image.new("RGB", (64, 64), fallback_color)

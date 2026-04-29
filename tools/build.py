@@ -48,6 +48,9 @@ def build() -> None:
         "pytest",
     ]
 
+    icon_path = PROJECT_ROOT / "assets" / "icons" / "app.ico"
+    icon_arg = f"--icon={icon_path}" if icon_path.exists() else ""
+
     cmd = [
         sys.executable,
         "-m",
@@ -59,6 +62,8 @@ def build() -> None:
         f"--workpath={PROJECT_ROOT / 'build'}",
         f"--specpath={PROJECT_ROOT}",
     ]
+    if icon_arg:
+        cmd.append(icon_arg)
 
     for data in add_data:
         cmd.append(f"--add-data={data}")
