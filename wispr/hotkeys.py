@@ -60,6 +60,9 @@ def start_listener(
     def on_press(key):
         global _toggle_lock
 
+        if state.shutdown_event.is_set():
+            return
+
         if state.model is None:
             if key == toggle_key or key == ptt_key:
                 sounds.play_error()
@@ -67,16 +70,17 @@ def start_listener(
 
         # — PTT: push-to-talk —
         if key == ptt_key:
-            if not state.ptt_active:
-                state.ptt_active = True
+            if not state.get_ptt():
+                state.set_ptt(True)
                 sounds.play_start()
                 overlay.show_ptt()
 
         # — Toggle single key —
         if toggle_key is not None and key == toggle_key and not _toggle_lock:
             _toggle_lock = True
-            state.toggle_active = not state.toggle_active
-            if state.toggle_active:
+            new_toggle = not state.get_toggle()
+            state.set_toggle(new_toggle)
+            if new_toggle:
                 sounds.play_start()
                 overlay.show_toggle()
                 logger.info("Toggle ON")
@@ -90,17 +94,20 @@ def start_listener(
         if load_model_key is not None and key == load_model_key:
             if state.model is None:
                 logger.info("Cargando modelo por hotkey...")
-                state.load_model_requested = True
+                state.set_load_requested(True)
             else:
                 logger.info("Descargando modelo por hotkey...")
-                state.unload_model_requested = True
+                state.set_unload_requested(True)
 
     def on_release(key):
         global _toggle_lock
 
+        if state.shutdown_event.is_set():
+            return
+
         # — PTT: fin push-to-talk —
-        if key == ptt_key and state.ptt_active:
-            state.ptt_active = False
+        if key == ptt_key and state.get_ptt():
+            state.set_ptt(False)
             state.audio_queue.put(None)
             sounds.play_stop()
             overlay.hide()

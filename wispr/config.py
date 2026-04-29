@@ -11,7 +11,7 @@ log = logging.getLogger(__name__)
 
 DEFAULTS = {
     "model": {
-        "name": "large-v3",
+        "name": "auto",
         "device": "cuda",
         "compute_type": "int8_float16",
     },
@@ -19,6 +19,7 @@ DEFAULTS = {
         "sample_rate": 16000,
         "channels": 1,
         "dtype": "float32",
+        "queue_maxsize": 100,
     },
     "hotkeys": {
         "ptt": "caps_lock",
@@ -36,6 +37,7 @@ DEFAULTS = {
         "prompt": "Nota técnica. Testing code, PRs, backend logs. Spanglish mode.",
         "min_duration": 0.3,
         "beam_size": 1,
+        "vad_parameters": {},
     },
 }
 
@@ -46,7 +48,8 @@ DEFAULT_TOML_CONTENT = """\
 
 [model]
 # Modelo de Whisper a usar. Opciones: tiny, base, small, medium, large-v2, large-v3
-name = "large-v3"
+# "auto" = detectar automáticamente según tu hardware
+name = "auto"
 # Dispositivo de cómputo. Opciones: "cuda" (GPU NVIDIA), "cpu"
 device = "cuda"
 # Tipo de cómputo. Opciones: "float16", "int8_float16", "int8"
@@ -60,6 +63,8 @@ sample_rate = 16000
 channels = 1
 # Tipo de dato del audio interno
 dtype = "float32"
+# Tamaño máximo de la cola de audio; los chunks más viejos se descartan cuando se llena
+queue_maxsize = 100
 
 [hotkeys]
 # Tecla para Push-to-Talk (mantener presionada mientras hablás)
@@ -90,6 +95,9 @@ prompt = "Nota técnica. Testing code, PRs, backend logs. Spanglish mode."
 min_duration = 0.3
 # Tamaño del beam para la transcripción (1 = más rápido, más = más preciso)
 beam_size = 1
+# Parámetros del VAD (Voice Activity Detection) de faster-whisper
+# Ejemplo: { min_silence_duration_ms = 500, speech_pad_ms = 200 }
+vad_parameters = {}
 """
 
 
@@ -149,6 +157,46 @@ def _validate(config: dict) -> None:
 def _write_default_config(path: pathlib.Path) -> None:
     """Write a commented default config.toml."""
     path.write_text(DEFAULT_TOML_CONTENT, encoding="utf-8")
+
+
+def detect_optimal_model(config: dict) -> str:
+    """Detectar modelo óptimo según VRAM disponible (GPU) o RAM total (CPU).
+
+    Mapeo:
+        < 4 GB  -> tiny
+        4-6 GB  -> base
+        6-10 GB -> small
+        10-16 GB-> medium
+        > 16 GB -> large-v3
+    """
+    device = config["model"]["device"]
+
+    try:
+        import psutil
+        import torch
+
+        if device == "cuda" and torch.cuda.is_available():
+            total_bytes = torch.cuda.get_device_properties(0).total_memory
+            total_gb = total_bytes / (1024 ** 3)
+            log.info("VRAM detectada: %.1f GB", total_gb)
+        else:
+            total_bytes = psutil.virtual_memory().total
+            total_gb = total_bytes / (1024 ** 3)
+            log.info("RAM detectada: %.1f GB (CPU)", total_gb)
+    except Exception as exc:
+        log.warning("No se pudo detectar memoria: %s. Usando 'base'.", exc)
+        return "base"
+
+    if total_gb < 4:
+        return "tiny"
+    elif total_gb < 6:
+        return "base"
+    elif total_gb < 10:
+        return "small"
+    elif total_gb < 16:
+        return "medium"
+    else:
+        return "large-v3"
 
 
 def load_config(path: str = "config.toml") -> dict:

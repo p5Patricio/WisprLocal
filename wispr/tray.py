@@ -21,7 +21,7 @@ def _create_image(color: str) -> Image.Image:
 
 
 def _update_tray_icon(icon: pystray.Icon, state: AppState) -> None:
-    if state.is_loading:
+    if state.get_loading():
         icon.icon = _create_image("yellow")
         icon.title = "WisprLocal \u2014 Cargando modelo..."
     elif state.model is not None:
@@ -52,6 +52,7 @@ def start_tray(
         _update_tray_icon(icon, state)
 
     def _quit(_icon, _item):
+        state.shutdown_event.set()
         on_quit(_icon)
 
     icon.menu = pystray.Menu(

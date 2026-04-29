@@ -22,6 +22,7 @@ STATES: dict[str, dict | None] = {
     "ptt":     {"text": "\u2b24  REC PTT",    "bg": "#E53E3E", "fg": "white"},
     "toggle":  {"text": "\u2b24  REC",         "bg": "#DD6B20", "fg": "white"},
     "loading": {"text": "\u23f3 Cargando...", "bg": "#718096", "fg": "white"},
+    "error":   {"text": "",                    "bg": "#C53030", "fg": "white"},
     "hidden":  None,
 }
 
@@ -77,7 +78,7 @@ class RecordingOverlay:
         self._ready.set()
         self.root.mainloop()
 
-    def _set_state(self, state_key: str) -> None:
+    def _set_state(self, state_key: str, text: str | None = None) -> None:
         """Actualiza el estado visual. SOLO llamar desde el thread de tkinter."""
         if not self._enabled or self.root is None:
             return
@@ -86,7 +87,8 @@ class RecordingOverlay:
             self.root.withdraw()
             return
         assert self._label is not None
-        self._label.config(text=state["text"], fg=state["fg"], bg=state["bg"])
+        display_text = text if text is not None else state["text"]
+        self._label.config(text=display_text, fg=state["fg"], bg=state["bg"])
         self.root.configure(bg=state["bg"])
         self._position_window()
         self.root.deiconify()
@@ -128,6 +130,11 @@ class RecordingOverlay:
         """Mostrar indicador de carga. Llamar desde cualquier thread."""
         if self._enabled and self.root:
             self.root.after(0, lambda: self._set_state("loading"))
+
+    def show_error(self, message: str) -> None:
+        """Mostrar indicador de error (rojo oscuro). Llamar desde cualquier thread."""
+        if self._enabled and self.root:
+            self.root.after(0, lambda: self._set_state("error", message))
 
     def hide(self) -> None:
         """Ocultar el overlay. Llamar desde cualquier thread."""

@@ -8,6 +8,7 @@ from typing import Callable
 import numpy as np
 from faster_whisper import WhisperModel
 
+from wispr.errors import ModelLoadError, TranscriptionError
 from wispr.state import AppState
 
 logger = logging.getLogger(__name__)
@@ -19,32 +20,47 @@ def load_model(state: AppState, config: dict, sounds, overlay=None) -> None:
     overlay: instancia de RecordingOverlay (opcional). Si se provee, muestra
     el estado "loading" durante la carga y lo oculta al terminar.
     """
-    if state.model is not None or state.is_loading:
+    if state.model is not None or state.get_loading():
         return
 
-    state.is_loading = True
+    state.set_loading(True)
     model_cfg = config["model"]
-    logger.info("Cargando modelo %s en %s...", model_cfg["name"], model_cfg["device"])
+    model_name = model_cfg["name"]
+
+    if model_name == "auto":
+        from wispr.config import detect_optimal_model
+
+        model_name = detect_optimal_model(config)
+
+    logger.info("Cargando modelo %s en %s...", model_name, model_cfg["device"])
 
     if overlay is not None:
         overlay.show_loading()
 
+    success = False
     try:
         model = WhisperModel(
-            model_cfg["name"],
+            model_name,
             device=model_cfg["device"],
             compute_type=model_cfg["compute_type"],
         )
         state.set_model(model)
         sounds.play_ready()
         logger.info("Modelo cargado y listo.")
-    except Exception:
+        success = True
+    except Exception as exc:
         logger.exception("Error al cargar el modelo")
         sounds.play_error()
-    finally:
-        state.is_loading = False
         if overlay is not None:
-            overlay.hide()
+            overlay.show_error(f"Error al cargar modelo: {exc}")
+        raise ModelLoadError(f"Error al cargar el modelo {model_name}: {exc}") from exc
+    finally:
+        state.set_loading(False)
+        if overlay is not None:
+            if not success:
+                pass  # overlay.show_error ya fue llamado; no ocultar
+            else:
+                overlay.hide()
 
 
 def unload_model(state: AppState) -> None:
@@ -70,9 +86,10 @@ def transcription_worker(
     language: str | None = transcription_cfg["language"] or None
     prompt: str = transcription_cfg["prompt"]
     beam_size: int = transcription_cfg["beam_size"]
+    vad_parameters: dict = transcription_cfg.get("vad_parameters", {})
 
     buffer: list = []
-    while True:
+    while not state.shutdown_event.is_set():
         chunk = state.audio_queue.get()
         if chunk is None:
             # Sentinel: procesar buffer acumulado
@@ -91,14 +108,30 @@ def transcription_worker(
                             task="transcribe",
                             beam_size=beam_size,
                             initial_prompt=prompt,
+                            vad_filter=True,
+                            vad_parameters=vad_parameters,
                         )
-                        text = "".join(seg.text for seg in segments).strip()
-                        if text:
-                            logger.info("Transcripción: %s", text)
-                            injection_fn(text)
-                    except Exception:
-                        logger.exception("Error en transcripción")
-                        sounds.play_error()
+                    except Exception as exc:
+                        logger.warning("VAD falló (%s), reintentando sin VAD...", exc)
+                        try:
+                            segments, _ = state.model.transcribe(
+                                audio_np,
+                                language=language,
+                                task="transcribe",
+                                beam_size=beam_size,
+                                initial_prompt=prompt,
+                            )
+                        except Exception as exc2:
+                            logger.exception("Error en transcripción")
+                            sounds.play_error()
+                            raise TranscriptionError(
+                                f"Error en transcripción: {exc2}"
+                            ) from exc2
+
+                    text = "".join(seg.text for seg in segments).strip()
+                    if text:
+                        logger.info("Transcripción: %s", text)
+                        injection_fn(text)
             buffer = []
         else:
             buffer.append(chunk)

@@ -1,0 +1,140 @@
+# WisprLocal Fase 1 — Archive Report
+
+> **Status:** ARCHIVED  
+> **Change:** wisprlocal-fase1  
+> **Date:** Archive phase completed  
+> **Verdict:** APPROVED (v2, post-fix)
+
+---
+
+## 1. Executive Summary
+
+WisprLocal Fase 1 ha sido completada, verificada y archivada exitosamente. El cambio introdujo 8 mejoras incrementales de fiabilidad y seguridad de hilos (thread safety) sin breaking changes, manteniendo la arquitectura tkinter existente.
+
+---
+
+## 2. Archived Artifacts
+
+Todos los artefactos del ciclo SDD han sido revisados y se encuentran archivados en este directorio:
+
+| Artifact | File | Status |
+|----------|------|--------|
+| Proposal | `proposal.md` | ARCHIVED |
+| Specification | `spec.md` | ARCHIVED |
+| Design | `design.md` | ARCHIVED |
+| Tasks | `tasks.md` | ARCHIVED |
+| Verify Report | `verify-report.md` | ARCHIVED |
+| **Archive Report** | `archive-report.md` | **CURRENT** |
+
+---
+
+## 3. Scope Delivered
+
+### In Scope — Completado al 100%
+
+| ID | Capability | Status | Evidence |
+|----|-----------|--------|----------|
+| P0 | `app-state-threadsafe` | ✅ | `state.py` con `threading.Lock`, getters/setters atómicos |
+| P0 | `graceful-shutdown` | ✅ | `__main__.py` con `threading.Event`, secuencia de join ordenada |
+| P0 | `audio-backpressure` | ✅ | `audio.py` con `queue.Queue(maxsize=100)` y drop-oldest |
+| P1 | `clipboard-restore` | ✅ | `injection.py` guarda/restaura clipboard; omite si >5MB o binario |
+| P1 | `vad-filtering` | ✅ | `transcription.py` con `vad_filter=True` y fallback configurable |
+| P1 | `hardware-auto-model` | ✅ | `config.py` detecta VRAM/RAM y sugiere modelo; override manual permitido |
+| P2 | `overlay-polish` | ✅ | `overlay.py` con estado de error (`#C53030`) y `show_error()` |
+| P2 | `structured-errors` | ✅ | `errors.py` con jerarquía plana: `WisprError`, `ModelLoadError`, etc. |
+
+### Out of Scope — Intencionalmente diferido
+
+- Cross-platform support, GUI installer, auto-updater → Fase 2/3
+- Model hot-swapping, web UI, cloud transcription
+- Reemplazo de tkinter
+
+---
+
+## 4. Traceability: Requirements → Implementation → Verification
+
+| Requirement | Files Changed | Verify Check | Result |
+|-------------|---------------|--------------|--------|
+| A1-A2: AppState thread-safe | `state.py`, `hotkeys.py` | app-state-threadsafe | PASS |
+| S1-S2: Graceful shutdown | `__main__.py`, `tray.py` | graceful-shutdown | PASS |
+| B1-B2: Audio backpressure | `audio.py`, `config.py` | audio-backpressure | PASS |
+| C1: Clipboard restore | `injection.py` | clipboard-restore | PASS |
+| V1-V2: VAD filtering | `transcription.py`, `config.py` | vad-filtering | PASS |
+| H1-H2: Hardware auto-model | `config.py`, `transcription.py` | hardware-auto-model | PASS |
+| O1-O2: Overlay polish | `overlay.py` | overlay-polish | PASS |
+| E1-E2: Structured errors | `errors.py`, todos los módulos | structured-errors | PASS |
+
+---
+
+## 5. Files Created / Modified
+
+### Created
+- `wispr/errors.py`
+
+### Modified
+- `wispr/state.py`
+- `wispr/config.py`
+- `wispr/audio.py`
+- `wispr/transcription.py`
+- `wispr/hotkeys.py`
+- `wispr/injection.py`
+- `wispr/overlay.py`
+- `wispr/tray.py`
+- `wispr/__main__.py`
+- `requirements.txt`
+
+---
+
+## 6. Verification Summary
+
+**Verdict final:** APPROVED
+
+**Checks ejecutados (10/10 PASS):**
+1. app-state-threadsafe — PASS
+2. graceful-shutdown — PASS
+3. audio-backpressure — PASS
+4. clipboard-restore — PASS
+5. vad-filtering — PASS
+6. hardware-auto-model — PASS
+7. overlay-polish — PASS
+8. structured-errors — PASS
+9. No breaking config changes — PASS
+10. py_compile all files — PASS
+
+**Fixes aplicados en v2 (post-fix):**
+- `state.py` + `hotkeys.py`: Agregados getters/setters atómicos para `load_requested` / `unload_requested`.
+- `audio.py`: Reemplazado `except Exception: pass` por logging + raise de `AudioDeviceError`.
+
+---
+
+## 7. Risks & Mitigations (Retrospectiva)
+
+| Risk | Resultado |
+|------|-----------|
+| VAD añade latencia o dropa voz válida | Mitigado: VAD configurable; threshold tuneable en `config.toml` |
+| Clipboard restore falla con contenido grande | Mitigado: Size check de 5MB; fallback a omitir restore |
+| Lock contention degrada responsividad | Mitigado: Secciones críticas cortas; lock nunca durante I/O |
+| Hardware detection misidentifica GPU | Mitigado: Override manual vía `config.toml` |
+
+---
+
+## 8. Open Questions (Pendientes de Fase 2/3)
+
+- ¿Se necesita un timeout de inactividad para `unload_model` automático?
+- ¿El VAD de faster-whisper tiene impacto medible en latencia? (se asume negligible para modelos locales)
+
+---
+
+## 9. Rollback Plan (vigente)
+
+Revertir al commit previo de la rama `main`. Todos los cambios son aditivos o localizados; no hay cambios de esquema ni dependencias que rompan compatibilidad hacia atrás.
+
+---
+
+## 10. Next Recommended Action
+
+**none** — El cambio está completo y cerrado. No se requieren acciones adicionales sobre Fase 1.
+
+---
+
+*Report generated by SDD Archive phase.*

@@ -26,20 +26,19 @@ def main() -> None:
     )
 
     try:
-        cfg = config_module.load_config()
+        config = config_module.load_config()
     except ValueError as exc:
         log.error("Configuración inválida: %s", exc)
         sys.exit(1)
 
     log.info(
         "WisprLocal iniciando... PTT: %s | Toggle: %s",
-        cfg["hotkeys"]["ptt"],
-        cfg["hotkeys"]["toggle"],
+        config["hotkeys"]["ptt"],
+        config["hotkeys"]["toggle"],
     )
 
-    config = cfg
-
-    state = AppState()
+    queue_maxsize = config["audio"].get("queue_maxsize", 100)
+    state = AppState(audio_queue_maxsize=queue_maxsize)
     overlay = RecordingOverlay(config)
 
     # 1. Transcription worker daemon
@@ -65,6 +64,22 @@ def main() -> None:
     listener = start_listener(state, config, overlay, sounds)
 
     # 5. Tray — BLOQUEA el main thread
+    def _on_quit(icon):
+        log.info("Iniciando shutdown...")
+        state.shutdown_event.set()
+        stop_stream(stream)
+        listener.stop()
+        state.audio_queue.put(None)
+        worker.join(timeout=5)
+        if worker.is_alive():
+            log.warning("transcription_worker no terminó en 5s")
+        loader.join(timeout=5)
+        if loader.is_alive():
+            log.warning("loader no terminó en 5s")
+        unload_model(state)
+        overlay.destroy()
+        icon.stop()
+
     try:
         start_tray(
             state,
@@ -75,12 +90,7 @@ def main() -> None:
                 daemon=True,
             ).start(),
             on_unload=lambda: unload_model(state),
-            on_quit=lambda icon: (
-                stop_stream(stream),
-                listener.stop(),
-                overlay.destroy(),
-                icon.stop(),
-            ),
+            on_quit=_on_quit,
         )
     except KeyboardInterrupt:
         stop_stream(stream)

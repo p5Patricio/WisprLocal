@@ -1,30 +1,58 @@
 """Inyección de texto via pyperclip + Ctrl+V."""
 
+from __future__ import annotations
+
+import logging
 import time
 
 import pyperclip
 from pynput import keyboard
+
+from wispr.errors import InjectionError
+
+log = logging.getLogger(__name__)
+_CLIPBOARD_SIZE_LIMIT = 5 * 1024 * 1024
 
 
 def inject_text(text: str, pre_delay_ms: int = 150, post_delay_ms: int = 400) -> None:
     """Inyecta *text* en la aplicación activa via clipboard + Ctrl+V.
 
     1. No-op si *text* es vacío.
-    2. Copia *text* al clipboard.
-    3. Espera *pre_delay_ms* ms para que el clipboard se registre.
-    4. Envía Ctrl+V via pynput.
-    5. Espera *post_delay_ms* ms para que la app procese el paste antes de continuar.
-    El texto queda en el clipboard para que el usuario pueda pegarlo manualmente si lo desea.
+    2. Guarda el contenido previo del clipboard (si es texto y <= 5 MB).
+    3. Copia *text* al clipboard.
+    4. Espera *pre_delay_ms* ms para que el clipboard se registre.
+    5. Envía Ctrl+V via pynput.
+    6. Espera *post_delay_ms* ms para que la app procese el paste antes de continuar.
+    7. Restaura el clipboard previo si se había guardado.
     """
     if not text:
         return
 
-    pyperclip.copy(text)
-    time.sleep(pre_delay_ms / 1000)
+    previous = None
+    should_restore = False
+    try:
+        previous = pyperclip.paste()
+        if previous is not None and isinstance(previous, str):
+            size = len(previous.encode("utf-8"))
+            should_restore = size <= _CLIPBOARD_SIZE_LIMIT
+    except Exception:
+        pass
 
-    controller = keyboard.Controller()
-    with controller.pressed(keyboard.Key.ctrl):
-        controller.press("v")
-        controller.release("v")
+    try:
+        pyperclip.copy(text)
+        time.sleep(pre_delay_ms / 1000)
 
-    time.sleep(post_delay_ms / 1000)
+        controller = keyboard.Controller()
+        with controller.pressed(keyboard.Key.ctrl):
+            controller.press("v")
+            controller.release("v")
+
+        time.sleep(post_delay_ms / 1000)
+    except Exception as exc:
+        raise InjectionError(f"Fallo al inyectar texto: {exc}") from exc
+    finally:
+        if should_restore:
+            try:
+                pyperclip.copy(previous)
+            except Exception:
+                pass
