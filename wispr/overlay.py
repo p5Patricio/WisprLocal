@@ -13,18 +13,26 @@ from __future__ import annotations
 
 import logging
 import threading
+import sys
 import tkinter as tk
 
 log = logging.getLogger(__name__)
 
-# Estados visuales del overlay
+# Estados visuales del overlay — paleta alineada con dark theme de customtkinter
 STATES: dict[str, dict | None] = {
-    "ptt":     {"text": "\u2b24  REC PTT",    "bg": "#E53E3E", "fg": "white"},
-    "toggle":  {"text": "\u2b24  REC",         "bg": "#DD6B20", "fg": "white"},
-    "loading": {"text": "\u23f3 Cargando...", "bg": "#718096", "fg": "white"},
-    "error":   {"text": "",                    "bg": "#C53030", "fg": "white"},
+    "ptt":     {"text": "\u2b24  REC PTT",    "bg": "#EF4444", "fg": "white"},
+    "toggle":  {"text": "\u2b24  REC",         "bg": "#F97316", "fg": "white"},
+    "loading": {"text": "\u23f3 Cargando...", "bg": "#6B7280", "fg": "white"},
+    "error":   {"text": "",                    "bg": "#DC2626", "fg": "white"},
     "hidden":  None,
 }
+
+# Fuente compatible con customtkinter / Windows 11
+_OVERLAY_FONT = (
+    "Segoe UI Variable" if sys.platform == "win32" else "Segoe UI",
+    14,
+    "bold",
+)
 
 
 class RecordingOverlay:
@@ -65,9 +73,9 @@ class RecordingOverlay:
         self._label = tk.Label(
             self.root,
             text="",
-            font=("Segoe UI", self._font_size, "bold"),
+            font=(_OVERLAY_FONT[0], self._font_size, _OVERLAY_FONT[2]),
             fg="white",
-            bg="#E53E3E",
+            bg="#EF4444",
             padx=12,
             pady=6,
         )

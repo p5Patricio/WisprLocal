@@ -205,6 +205,54 @@ def detect_optimal_model(config: dict) -> str:
         return "large-v3"
 
 
+def is_first_run(path: str = "config.toml") -> bool:
+    """Retorna True si el archivo de configuración no existe."""
+    return not pathlib.Path(path).exists()
+
+
+def write_config(path: str, config_dict: dict) -> None:
+    """Escribe config.toml preservando comentarios de DEFAULT_TOML_CONTENT.
+
+    Actualiza únicamente los valores presentes en *config_dict*; el resto
+    del contenido (incluyendo comentarios y estructura) se conserva tal cual.
+    """
+    p = pathlib.Path(path)
+    lines = DEFAULT_TOML_CONTENT.splitlines(keepends=True)
+    current_section: str | None = None
+    out_lines: list[str] = []
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            current_section = stripped[1:-1].strip()
+            out_lines.append(line)
+            continue
+
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            out_lines.append(line)
+            continue
+
+        key = stripped.split("=", 1)[0].strip()
+        if (
+            current_section
+            and current_section in config_dict
+            and key in config_dict[current_section]
+        ):
+            value = config_dict[current_section][key]
+            indent = line[: len(line) - len(line.lstrip())]
+            if isinstance(value, str):
+                formatted = f'"{value}"'
+            elif isinstance(value, bool):
+                formatted = str(value).lower()
+            else:
+                formatted = str(value)
+            out_lines.append(f"{indent}{key} = {formatted}\n")
+        else:
+            out_lines.append(line)
+
+    p.write_text("".join(out_lines), encoding="utf-8")
+
+
 def load_config(path: str = "config.toml") -> dict:
     """Carga config.toml, fusiona con DEFAULTS y valida. Crea el archivo si no existe."""
     p = pathlib.Path(path)

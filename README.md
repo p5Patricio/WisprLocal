@@ -5,7 +5,23 @@ Dictado por voz local, sin nube, bilingüe español/inglés. Transcribe con Whis
 ![Python](https://img.shields.io/badge/python-3.12+-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Status](https://img.shields.io/badge/status-Fase%202%20%E2%9C%85-brightgreen)
+![Status](https://img.shields.io/badge/status-Fase%203%20%E2%9C%85-brightgreen)
+![GitHub release](https://img.shields.io/github/v/release/p5Patricio/WisprLocal)
+![Downloads](https://img.shields.io/github/downloads/p5Patricio/WisprLocal/total)
+![Stars](https://img.shields.io/github/stars/p5Patricio/WisprLocal?style=social)
+
+---
+
+## 🚀 Aplicación de escritorio profesional
+
+WisprLocal no es un script más: es una **aplicación de escritorio completa** con:
+
+- Instalador gráfico con detección automática de hardware
+- Asistente de primer uso (onboarding) interactivo
+- Configuración visual con pestañas (modelo, audio, hotkeys, overlay)
+- Icono en bandeja del sistema con estados visuales
+- Verificación automática de actualizaciones desde GitHub Releases
+- Empaquetado con PyInstaller para distribución sin Python
 
 ---
 
@@ -20,6 +36,16 @@ Dictado por voz local, sin nube, bilingüe español/inglés. Transcribe con Whis
 
 ---
 
+## 📸 Screenshots
+
+| Splash | Configuración | Onboarding |
+|--------|--------------|------------|
+| ![Splash](docs/screenshots/splash.png) | ![Settings](docs/screenshots/settings.png) | ![Onboarding](docs/screenshots/onboarding.png) |
+
+> 💡 Las imágenes se agregan en `docs/screenshots/`. ¡Contribuciones visuales son bienvenidas!
+
+---
+
 ## Instalación en 3 pasos
 
 **Requisitos**: Python 3.12+, Windows 10/11, GPU NVIDIA (opcional pero recomendado)
@@ -29,8 +55,8 @@ Dictado por voz local, sin nube, bilingüe español/inglés. Transcribe con Whis
 git clone https://github.com/p5Patricio/WisprLocal.git
 cd WisprLocal
 
-# 2. Correr el instalador
-python install.py
+# 2. Correr el instalador gráfico
+python installer/gui_installer.py
 
 # 3. Abrir WisprLocal
 # Doble clic en lanzador.vbs  (sin ventana de consola)
@@ -51,6 +77,21 @@ El instalador detecta tu GPU automáticamente e instala PyTorch con CUDA si corr
 | `large-v3` | ~10 GB | ~16 GB | Muy lento | La mejor |
 
 > 💡 Con `name = "auto"` en `config.toml`, WisprLocal detecta tu hardware y elige el mejor modelo que pueda correr cómodamente.
+
+---
+
+## ⚡ Comparativa
+
+| Característica | WisprLocal | Otter.ai | Whisper Desktop | Windows Voice Typing |
+|---------------|------------|----------|-----------------|---------------------|
+| **100% offline** | ✅ | ❌ | ✅ | ❌ |
+| **Spanglish técnico** | ✅ | ⚠️ | ✅ | ❌ |
+| **Inyección automática** | ✅ | ❌ | ❌ | ❌ |
+| **Overlay visual** | ✅ | ❌ | ❌ | ❌ |
+| **Gestión de VRAM** | ✅ | N/A | ❌ | N/A |
+| **Código abierto** | ✅ | ❌ | ✅ | ❌ |
+| **Sin suscripción** | ✅ | ❌ | ✅ | ✅ |
+| **Cross-platform** | ✅ | ✅ | ❌ | ❌ |
 
 ---
 
@@ -113,6 +154,25 @@ Esta versión trae mejoras fundamentales de robustez:
 - ✅ **Overlay con estados de error** — feedback visual claro cuando algo falla
 - ✅ **Errores estructurados** — excepciones propias con mensajes en español entendibles
 
+## Novedades Fase 2 — Cross-platform
+
+- ✅ **Windows / Linux / macOS** — abstracción de plataforma completa
+- ✅ **Atajos de pegado adaptativos** — Ctrl+V o Cmd+V según el OS
+- ✅ **Beep nativo** — winsound, osascript o beep según la plataforma
+- ✅ **Lanzadores nativos** — .vbs en Windows, .sh en Linux/macOS
+- ✅ **Inicio automático** — Startup folder, systemd user service, LaunchAgent
+
+## Novedades Fase 3 — GUI Installer + Branding profesional
+
+- ✅ **Instalador gráfico standalone** — wizard de 5 pasos con detección de hardware
+- ✅ **Onboarding interactivo** — primer uso guiado: mic test, captura de hotkeys, tutorial
+- ✅ **Configuración visual** — tabs para modelo, audio, hotkeys y overlay
+- ✅ **Splash screen** — feedback visual durante la carga del modelo
+- ✅ **Bandeja mejorada** — íconos reales (microphone silhouette) con estados coloridos
+- ✅ **Verificación de updates** — consulta GitHub Releases y muestra diálogo de actualización
+- ✅ **Build con PyInstaller** — `python tools/build.py` genera distribución portable
+- ✅ **Branding profesional** — íconos multi-formato (.ico, .icns, .png) generados programáticamente
+
 ---
 
 ## Troubleshooting
@@ -148,19 +208,31 @@ wispr/
 ├── overlay.py       # indicador visual (tkinter, siempre encima)
 ├── tray.py          # ícono en system tray (pystray)
 ├── sounds.py        # feedback auditivo (winsound)
-└── errors.py        # jerarquía de excepciones propias
+├── errors.py        # jerarquía de excepciones propias
+├── splash.py        # splash screen de carga (customtkinter)
+├── settings_gui.py  # ventana de configuración con tabs
+├── onboarding.py    # wizard de primer uso
+└── updater.py       # verificación de actualizaciones desde GitHub
+
+installer/
+└── gui_installer.py # instalador gráfico standalone
+
+tools/
+├── generate_icons.py # genera íconos de marca (.ico, .icns, .png)
+└── build.py          # script de build con PyInstaller
 ```
 
 **Modelo de threads**
 
 | Thread | Qué hace |
 |--------|----------|
-| Main | Coordina shutdown, corre system tray |
+| Main | Coordina shutdown, corre system tray y mainloop de tkinter |
 | pynput | Escucha teclado, actualiza `AppState` vía getters/setters atómicos |
 | PortAudio | Captura audio, encola chunks en `audio_queue` (bounded) |
 | transcription_worker | Espera sentinel, transcribe con VAD, inyecta |
 | overlay | Corre `tk.mainloop()`, recibe updates vía `root.after()` |
 | loader | Carga el modelo al arrancar (daemon) |
+| tray | Ejecuta `pystray.Icon.run()` en daemon thread |
 
 Todos los threads se comunican a través de `AppState` (thread-safe) y `audio_queue` — con locks para estado mutable y señal de shutdown vía `threading.Event`.
 
@@ -170,7 +242,7 @@ Todos los threads se comunican a través de `AppState` (thread-safe) y `audio_qu
 
 - **Fase 1** ✅ — Reliability & Thread Safety
 - **Fase 2** ✅ — Cross-platform (Windows / Linux / macOS)
-- **Fase 3** 🔲 — GUI Installer + Branding profesional
+- **Fase 3** ✅ — GUI Installer + Branding profesional
 
 ---
 
@@ -190,8 +262,10 @@ Estructura del proyecto:
 ```
 WisprLocal/
 ├── wispr/           # paquete principal
-├── tools/           # scripts de diagnóstico (verificar_gpu.py, etc.)
-├── install.py       # instalador automatizado
+├── installer/       # instalador gráfico standalone
+├── tools/           # scripts de utilidad (build, icons, diagnóstico)
+├── assets/          # íconos y recursos visuales
+├── install.py       # instalador automatizado (legacy)
 ├── requirements.txt # dependencias (sin torch — install.py lo maneja)
 ├── sdd/             # documentación de cambios (Spec-Driven Development)
 └── config.toml      # configuración local (no commitear)
