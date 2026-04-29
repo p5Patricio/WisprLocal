@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from pynput import keyboard as kb
 
 from wispr.state import AppState
 
 logger = logging.getLogger(__name__)
+
+if os.environ.get("XDG_SESSION_TYPE") == "wayland":
+    logger.warning(
+        "Wayland detectado. Los atajos globales pueden no funcionar correctamente."
+    )
 
 _active_keys: set = set()
 _toggle_lock = False

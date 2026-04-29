@@ -21,3 +21,7 @@ class AudioDeviceError(WisprError):
 
 class InjectionError(WisprError):
     """Error al inyectar texto en la aplicación activa."""
+
+
+class UnsupportedPlatformError(WisprError):
+    """Plataforma no soportada."""

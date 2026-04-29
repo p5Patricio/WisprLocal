@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from typing import Callable
 
-import pystray
 from PIL import Image, ImageDraw
 
 from wispr.state import AppState
@@ -20,7 +19,7 @@ def _create_image(color: str) -> Image.Image:
     return image
 
 
-def _update_tray_icon(icon: pystray.Icon, state: AppState) -> None:
+def _update_tray_icon(icon, state: AppState) -> None:
     if state.get_loading():
         icon.icon = _create_image("yellow")
         icon.title = "WisprLocal \u2014 Cargando modelo..."
@@ -37,9 +36,11 @@ def start_tray(
     config: dict,  # noqa: ARG001 — reservado para configuración en Fase 2
     on_load: Callable[[], None],
     on_unload: Callable[[], None],
-    on_quit: Callable[[pystray.Icon], None],
+    on_quit: Callable[[object], None],
 ) -> None:
     """Crea el icono de bandeja y bloquea el main thread hasta que se cierra."""
+
+    import pystray
 
     icon = pystray.Icon("Wispr", _create_image("gray"), "WisprLocal \u2014 Sin modelo (clic derecho para cargar)")
 
@@ -62,4 +63,11 @@ def start_tray(
     )
 
     logger.info("Tray iniciado.")
-    icon.run()
+    try:
+        icon.run()
+    except Exception as exc:
+        logger.warning(
+            "No se pudo iniciar el icono de bandeja: %s. Continuando sin tray...",
+            exc,
+        )
+        state.shutdown_event.wait()

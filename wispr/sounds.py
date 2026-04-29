@@ -1,11 +1,16 @@
-"""Feedback auditivo via winsound. Cada función lanza un daemon thread."""
+"""Feedback auditivo via plataforma. Cada función lanza un daemon thread."""
+
+from __future__ import annotations
 
 import threading
-import winsound
+
+from wispr.platform import get_platform
+
+_platform = get_platform()
 
 
 def _beep(freq: int, duration: int) -> None:
-    winsound.Beep(freq, duration)
+    _platform.play_beep(freq, duration / 1000.0)
 
 
 def play_start() -> None:
@@ -22,8 +27,8 @@ def play_ready() -> None:
     """1000Hz/80ms + 1200Hz/80ms — modelo listo."""
 
     def _double():
-        winsound.Beep(1000, 80)
-        winsound.Beep(1200, 80)
+        _platform.play_beep(1000, 0.080)
+        _platform.play_beep(1200, 0.080)
 
     threading.Thread(target=_double, daemon=True).start()
 

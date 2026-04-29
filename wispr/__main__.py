@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import pathlib
 import sys
 import threading
 
@@ -25,11 +26,21 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
+    config_path = pathlib.Path("config.toml")
+    is_first_run = not config_path.exists()
+
     try:
         config = config_module.load_config()
     except ValueError as exc:
         log.error("Configuración inválida: %s", exc)
         sys.exit(1)
+
+    if is_first_run and sys.platform == "darwin":
+        log.warning(
+            "macOS: Para que WisprLocal funcione correctamente, concedé permisos de "
+            "Accesibilidad a la terminal/IDE desde la que se ejecuta "
+            "(Preferencias del Sistema > Seguridad y Privacidad > Accesibilidad)."
+        )
 
     log.info(
         "WisprLocal iniciando... PTT: %s | Toggle: %s",

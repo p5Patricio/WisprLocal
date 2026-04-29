@@ -50,7 +50,7 @@ DEFAULT_TOML_CONTENT = """\
 # Modelo de Whisper a usar. Opciones: tiny, base, small, medium, large-v2, large-v3
 # "auto" = detectar automáticamente según tu hardware
 name = "auto"
-# Dispositivo de cómputo. Opciones: "cuda" (GPU NVIDIA), "cpu"
+# Dispositivo de cómputo. Opciones: "cuda" (GPU NVIDIA), "cpu", "mps" (Apple Silicon macOS)
 device = "cuda"
 # Tipo de cómputo. Opciones: "float16", "int8_float16", "int8"
 # float16 = máxima calidad, int8_float16 = balance calidad/VRAM, int8 = mínima VRAM
@@ -114,7 +114,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 def _validate(config: dict) -> None:
     """Raise ValueError on invalid config values."""
-    valid_devices = ("cuda", "cpu")
+    valid_devices = ("cuda", "cpu", "mps")
     if config["model"]["device"] not in valid_devices:
         raise ValueError(
             f"model.device debe ser uno de {valid_devices}, se recibió: '{config['model']['device']}'"
@@ -160,7 +160,7 @@ def _write_default_config(path: pathlib.Path) -> None:
 
 
 def detect_optimal_model(config: dict) -> str:
-    """Detectar modelo óptimo según VRAM disponible (GPU) o RAM total (CPU).
+    """Detectar modelo óptimo según VRAM disponible (GPU) o RAM total (CPU/MPS).
 
     Mapeo:
         < 4 GB  -> tiny
@@ -169,7 +169,10 @@ def detect_optimal_model(config: dict) -> str:
         10-16 GB-> medium
         > 16 GB -> large-v3
     """
-    device = config["model"]["device"]
+    from wispr.platform import get_platform
+
+    platform = get_platform()
+    device, _ = platform.detect_gpu()
 
     try:
         import psutil
@@ -182,7 +185,10 @@ def detect_optimal_model(config: dict) -> str:
         else:
             total_bytes = psutil.virtual_memory().total
             total_gb = total_bytes / (1024 ** 3)
-            log.info("RAM detectada: %.1f GB (CPU)", total_gb)
+            if device == "mps":
+                log.info("RAM detectada: %.1f GB (MPS unified memory)", total_gb)
+            else:
+                log.info("RAM detectada: %.1f GB (CPU)", total_gb)
     except Exception as exc:
         log.warning("No se pudo detectar memoria: %s. Usando 'base'.", exc)
         return "base"
