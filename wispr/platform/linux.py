@@ -87,6 +87,9 @@ Categories=Utility;AudioVideo;
         desktop_path.write_text(content, encoding="utf-8")
         log.info("Archivo .desktop generado: %s", desktop_path)
 
+    def _get_service_path(self) -> Path:
+        return Path.home() / ".config" / "systemd" / "user" / "wisprlocal.service"
+
     def setup_autostart(self) -> None:
         """Crear y habilitar servicio systemd de usuario."""
         here = self.get_project_root()
@@ -96,7 +99,7 @@ Categories=Utility;AudioVideo;
 
         service_dir = Path.home() / ".config" / "systemd" / "user"
         service_dir.mkdir(parents=True, exist_ok=True)
-        service_path = service_dir / "wisprlocal.service"
+        service_path = self._get_service_path()
 
         service_content = f"""\
 [Unit]
@@ -128,3 +131,38 @@ WantedBy=default.target
             log.info("Servicio systemd habilitado: %s", service_path)
         except Exception as exc:
             log.warning("No se pudo habilitar el servicio systemd: %s", exc)
+
+    def remove_autostart(self) -> None:
+        """Deshabilitar y eliminar servicio systemd de usuario."""
+        service_path = self._get_service_path()
+        try:
+            if service_path.exists():
+                subprocess.run(
+                    ["systemctl", "--user", "disable", "wisprlocal.service"],
+                    check=True,
+                    capture_output=True,
+                )
+                service_path.unlink()
+                subprocess.run(
+                    ["systemctl", "--user", "daemon-reload"],
+                    check=True,
+                    capture_output=True,
+                )
+                log.info("Servicio systemd deshabilitado")
+        except Exception as exc:
+            log.warning("No se pudo deshabilitar systemd: %s", exc)
+
+    def is_autostart_enabled(self) -> bool:
+        """Retorna True si el servicio systemd existe y está habilitado."""
+        service_path = self._get_service_path()
+        if not service_path.exists():
+            return False
+        try:
+            result = subprocess.run(
+                ["systemctl", "--user", "is-enabled", "wisprlocal.service"],
+                capture_output=True,
+                text=True,
+            )
+            return result.returncode == 0 and "enabled" in result.stdout
+        except Exception:
+            return False

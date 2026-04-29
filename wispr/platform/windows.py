@@ -71,6 +71,17 @@ class WindowsPlatform(BasePlatform):
         launcher_vbs.write_text(content, encoding="utf-8")
         log.info("lanzador.vbs generado en %s", launcher_vbs)
 
+    def _get_startup_path(self) -> Path:
+        return (
+            Path(os.environ.get("APPDATA", ""))
+            / "Microsoft"
+            / "Windows"
+            / "Start Menu"
+            / "Programs"
+            / "Startup"
+            / "WisprLocal.vbs"
+        )
+
     def setup_autostart(self) -> None:
         """Copiar lanzador.vbs al directorio de inicio automático de Windows."""
         here = self.get_project_root()
@@ -78,15 +89,21 @@ class WindowsPlatform(BasePlatform):
         if not launcher_vbs.exists():
             self.generate_launcher()
 
-        startup_dir = (
-            Path(os.environ.get("APPDATA", ""))
-            / "Microsoft"
-            / "Windows"
-            / "Start Menu"
-            / "Programs"
-            / "Startup"
-        )
-        startup_dest = startup_dir / "WisprLocal.vbs"
-        startup_dir.mkdir(parents=True, exist_ok=True)
+        startup_dest = self._get_startup_path()
+        startup_dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(launcher_vbs, startup_dest)
         log.info("Copiado a Inicio automático: %s", startup_dest)
+
+    def remove_autostart(self) -> None:
+        """Eliminar lanzador.vbs del directorio de inicio automático."""
+        startup_dest = self._get_startup_path()
+        if startup_dest.exists():
+            try:
+                startup_dest.unlink()
+                log.info("Eliminado de Inicio automático: %s", startup_dest)
+            except Exception as exc:
+                log.warning("No se pudo eliminar de Inicio automático: %s", exc)
+
+    def is_autostart_enabled(self) -> bool:
+        """Retorna True si WisprLocal.vbs existe en el directorio de Startup."""
+        return self._get_startup_path().exists()

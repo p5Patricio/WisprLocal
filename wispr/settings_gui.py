@@ -14,6 +14,8 @@ except ImportError:  # pragma: no cover
 from pynput import keyboard as kb
 
 from wispr import config as config_module
+from wispr.history import clear, get_entries
+from wispr.platform import get_platform
 
 log = logging.getLogger(__name__)
 
@@ -64,7 +66,7 @@ class _KeyCaptureDialog:
 
 
 class SettingsGUI:
-    """Ventana de configuración con pestañas (Modelo, Audio, Hotkeys, Overlay).
+    """Ventana de configuración con pestañas (Modelo, Audio, Hotkeys, Overlay, Historial, Sistema).
 
     Si *customtkinter* no está disponible, la ventana no se crea.
     """
@@ -79,7 +81,7 @@ class SettingsGUI:
 
         self._window = ctk.CTkToplevel(master)
         self._window.title("Configuración de WisprLocal")
-        self._window.geometry("600x500")
+        self._window.geometry("650x520")
         self._window.resizable(False, False)
         if master is not None:
             self._window.transient(master)
@@ -89,18 +91,22 @@ class SettingsGUI:
     def _build_ui(self) -> None:
         """Construye la interfaz con tabs y botones."""
         assert ctk is not None
-        self._tabview = ctk.CTkTabview(self._window, width=560, height=400)
+        self._tabview = ctk.CTkTabview(self._window, width=610, height=420)
         self._tabview.pack(pady=10, padx=20, fill="both", expand=True)
 
         self._tabview.add("Modelo")
         self._tabview.add("Audio")
         self._tabview.add("Hotkeys")
         self._tabview.add("Overlay")
+        self._tabview.add("Historial")
+        self._tabview.add("Sistema")
 
         self._build_model_tab()
         self._build_audio_tab()
         self._build_hotkeys_tab()
         self._build_overlay_tab()
+        self._build_history_tab()
+        self._build_system_tab()
 
         btn_frame = ctk.CTkFrame(self._window, fg_color="transparent")
         btn_frame.pack(pady=10)
@@ -203,6 +209,71 @@ class SettingsGUI:
         self._font_size.insert(0, str(overlay_cfg.get("font_size", 14)))
         self._font_size.grid(row=3, column=1, padx=10, pady=10)
 
+    def _build_history_tab(self) -> None:
+        """Pestaña Historial: lista de transcripciones previas."""
+        assert ctk is not None
+        tab = self._tabview.tab("Historial")
+
+        entries = get_entries(limit=100)
+
+        ctk.CTkLabel(tab, text=f"Últimas {len(entries)} transcripciones", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(10, 5))
+
+        scroll_frame = ctk.CTkScrollableFrame(tab, width=560, height=300)
+        scroll_frame.pack(padx=10, pady=5, fill="both", expand=True)
+
+        if not entries:
+            ctk.CTkLabel(scroll_frame, text="Aún no hay transcripciones.", font=ctk.CTkFont(size=12)).pack(pady=20)
+        else:
+            for entry in entries:
+                ts = entry.get("timestamp", "")[:19].replace("T", " ")
+                text = entry.get("text", "")
+                row = ctk.CTkFrame(scroll_frame, fg_color="transparent")
+                row.pack(fill="x", pady=2)
+                ctk.CTkLabel(row, text=ts, font=ctk.CTkFont(size=10), width=140).pack(side="left", padx=5)
+                lbl = ctk.CTkLabel(row, text=text, font=ctk.CTkFont(size=11), anchor="w")
+                lbl.pack(side="left", fill="x", expand=True, padx=5)
+                ctk.CTkButton(row, text="📋", width=30, command=lambda t=text: self._copy_to_clipboard(t)).pack(side="right", padx=5)
+
+        ctk.CTkButton(tab, text="Limpiar historial", command=self._clear_history, width=150).pack(pady=10)
+
+    def _copy_to_clipboard(self, text: str) -> None:
+        try:
+            import pyperclip
+            pyperclip.copy(text)
+        except Exception as exc:
+            log.warning("No se pudo copiar al clipboard: %s", exc)
+
+    def _clear_history(self) -> None:
+        clear()
+        if self._window is not None:
+            self._window.destroy()
+            SettingsGUI(master=self._master, config=self._config)
+
+    def _build_system_tab(self) -> None:
+        """Pestaña Sistema: inicio automático y otras opciones."""
+        assert ctk is not None
+        tab = self._tabview.tab("Sistema")
+
+        platform = get_platform()
+        autostart_enabled = platform.is_autostart_enabled()
+
+        self._autostart_var = tk.BooleanVar(value=autostart_enabled)
+        self._autostart_check = ctk.CTkCheckBox(
+            tab,
+            text="Iniciar WisprLocal al encender el sistema",
+            variable=self._autostart_var,
+            onvalue=True,
+            offvalue=False,
+        )
+        self._autostart_check.pack(pady=20, padx=20, anchor="w")
+
+        ctk.CTkLabel(
+            tab,
+            text="Esto crea un lanzador en el directorio de inicio automático de tu sistema.",
+            font=ctk.CTkFont(size=11),
+            text_color="gray",
+        ).pack(pady=5, padx=20, anchor="w")
+
     def _capture_key(self, entry: ctk.CTkEntry) -> None:
         """Abre el diálogo de captura de tecla y escribe el resultado en *entry*."""
         if self._window is None:
@@ -242,6 +313,14 @@ class SettingsGUI:
                 },
             }
             config_module.write_config("config.toml", new_config)
+
+            # Manejar inicio automático
+            platform = get_platform()
+            if getattr(self, "_autostart_var", None) is not None:
+                if self._autostart_var.get():
+                    platform.setup_autostart()
+                else:
+                    platform.remove_autostart()
 
             dialog = ctk.CTkToplevel(self._window)
             dialog.title("Configuración guardada")

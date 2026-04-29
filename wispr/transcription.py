@@ -9,6 +9,7 @@ import numpy as np
 from faster_whisper import WhisperModel
 
 from wispr.errors import ModelLoadError, TranscriptionError
+from wispr.history import add_entry, trim
 from wispr.state import AppState
 
 logger = logging.getLogger(__name__)
@@ -132,6 +133,8 @@ def transcription_worker(
                     if text:
                         logger.info("Transcripción: %s", text)
                         injection_fn(text)
+                        add_entry(text)
+                        trim()
             buffer = []
         else:
             buffer.append(chunk)

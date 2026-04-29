@@ -26,6 +26,14 @@ class BasePlatform(ABC):
         """Configurar inicio automático del sistema."""
 
     @abstractmethod
+    def remove_autostart(self) -> None:
+        """Deshabilitar inicio automático del sistema."""
+
+    @abstractmethod
+    def is_autostart_enabled(self) -> bool:
+        """Retorna True si el inicio automático está configurado."""
+
+    @abstractmethod
     def get_venv_python(self) -> Path:
         """Retornar el path al ejecutable de Python del entorno virtual."""
 

@@ -63,6 +63,9 @@ class MacPlatform(BasePlatform):
         run_sh.chmod(0o755)
         log.info("run.sh generado en %s", run_sh)
 
+    def _get_plist_path(self) -> Path:
+        return Path.home() / "Library" / "LaunchAgents" / "com.wisprlocal.plist"
+
     def setup_autostart(self) -> None:
         """Crear y cargar LaunchAgent."""
         here = self.get_project_root()
@@ -70,7 +73,7 @@ class MacPlatform(BasePlatform):
 
         plist_dir = Path.home() / "Library" / "LaunchAgents"
         plist_dir.mkdir(parents=True, exist_ok=True)
-        plist_path = plist_dir / "com.wisprlocal.plist"
+        plist_path = self._get_plist_path()
 
         plist_content = f"""\
 <?xml version="1.0" encoding="UTF-8"?>
@@ -105,3 +108,22 @@ class MacPlatform(BasePlatform):
             log.info("LaunchAgent cargado: %s", plist_path)
         except Exception as exc:
             log.warning("No se pudo cargar el LaunchAgent: %s", exc)
+
+    def remove_autostart(self) -> None:
+        """Descargar y eliminar LaunchAgent."""
+        plist_path = self._get_plist_path()
+        try:
+            if plist_path.exists():
+                subprocess.run(
+                    ["launchctl", "unload", str(plist_path)],
+                    check=True,
+                    capture_output=True,
+                )
+                plist_path.unlink()
+                log.info("LaunchAgent descargado")
+        except Exception as exc:
+            log.warning("No se pudo descargar el LaunchAgent: %s", exc)
+
+    def is_autostart_enabled(self) -> bool:
+        """Retorna True si el plist existe."""
+        return self._get_plist_path().exists()

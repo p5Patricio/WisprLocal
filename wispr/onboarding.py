@@ -28,6 +28,7 @@ _STEP_TITLES = [
     "Hardware",
     "Micrófono",
     "Hotkeys",
+    "Inicio automático",
     "Tutorial",
 ]
 
@@ -105,6 +106,8 @@ class OnboardingWizard:
         elif idx == 3:
             self._build_step_hotkeys()
         elif idx == 4:
+            self._build_step_autostart()
+        elif idx == 5:
             self._build_step_tutorial()
 
         self._btn_prev.configure(state="disabled" if idx == 0 else "normal")
@@ -115,6 +118,7 @@ class OnboardingWizard:
 
     def _next_step(self) -> None:
         if self._current_step == len(_STEP_TITLES) - 1:
+            self._apply_autostart()
             self._mark_first_run_done()
             self._window.destroy()
         else:
@@ -302,7 +306,45 @@ class OnboardingWizard:
         listener.start()
 
     # ------------------------------------------------------------------
-    # Step 5 — Tutorial
+    # Step 5 — Autostart
+    # ------------------------------------------------------------------
+
+    def _build_step_autostart(self) -> None:
+        assert ctk is not None
+        ctk.CTkLabel(
+            self._content,
+            text="¿Iniciar WisprLocal al encender el sistema?",
+            font=ctk.CTkFont(size=16, weight="bold"),
+        ).pack(pady=10)
+
+        ctk.CTkLabel(
+            self._content,
+            text="WisprLocal puede iniciarse automáticamente cuando enciendas tu computadora.\n"
+                 "Esto asegura que siempre esté listo para dictar.",
+            font=ctk.CTkFont(size=13),
+            justify="center",
+        ).pack(pady=10)
+
+        self._autostart_var = tk.BooleanVar(value=True)
+        ctk.CTkCheckBox(
+            self._content,
+            text="Sí, iniciar WisprLocal automáticamente",
+            variable=self._autostart_var,
+            onvalue=True,
+            offvalue=False,
+        ).pack(pady=20)
+
+    def _apply_autostart(self) -> None:
+        """Aplica la preferencia de inicio automático si el usuario la seleccionó."""
+        if getattr(self, "_autostart_var", None) is not None and self._autostart_var.get():
+            try:
+                platform = get_platform()
+                platform.setup_autostart()
+            except Exception as exc:
+                log.warning("No se pudo configurar inicio automático: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Step 6 — Tutorial
     # ------------------------------------------------------------------
 
     def _build_step_tutorial(self) -> None:
