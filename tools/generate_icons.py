@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import logging
 import struct
 import sys
@@ -109,7 +110,9 @@ def _write_icns(images: dict[int, Image.Image], path: Path) -> None:
     for size, img in images.items():
         if size not in type_map:
             continue
-        data = img.tobytes("png")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        data = buf.getvalue()
         type_code = type_map[size]
         entry_size = 8 + len(data)
         entries.append(struct.pack(">4sI", type_code, entry_size) + data)

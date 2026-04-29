@@ -322,7 +322,9 @@ class InstallerWizard:
                 "device": self._selected_device,
                 "compute_type": self._selected_compute,
             },
-            "first_run": False,
+            "app": {
+                "first_run": False,
+            },
         }
         config_path = pathlib.Path(__file__).parent.parent / "config.toml"
         config_module.write_config(str(config_path), config_dict)

@@ -10,6 +10,9 @@ import tomllib
 log = logging.getLogger(__name__)
 
 DEFAULTS = {
+    "app": {
+        "first_run": True,
+    },
     "model": {
         "name": "auto",
         "device": "cuda",
@@ -85,6 +88,10 @@ position = "bottom-right"
 opacity = 0.85
 # Tamaño de la fuente del indicador
 font_size = 14
+
+[app]
+# Indica si es la primera vez que se ejecuta la aplicación.
+first_run = true
 
 [transcription]
 # Idioma de transcripción. "" = detección automática (recomendado para Spanglish)

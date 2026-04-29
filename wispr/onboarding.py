@@ -131,18 +131,19 @@ class OnboardingWizard:
     def _mark_first_run_done(self) -> None:
         """Escribe ``first_run = false`` en config.toml."""
         config_path = Path("config.toml")
-        if config_path.exists():
-            try:
+        try:
+            if config_path.exists():
                 import tomllib
                 with open(config_path, "rb") as f:
                     cfg = tomllib.load(f)
-                cfg["first_run"] = False
-                config_module.write_config(str(config_path), cfg)
-            except Exception as exc:
-                log.warning("No se pudo marcar first_run como false: %s", exc)
-        else:
-            # Crear config mínimo
-            config_module.write_config(str(config_path), {"first_run": False})
+            else:
+                cfg = {}
+            if "app" not in cfg:
+                cfg["app"] = {}
+            cfg["app"]["first_run"] = False
+            config_module.write_config(str(config_path), cfg)
+        except Exception as exc:
+            log.warning("No se pudo marcar first_run como false: %s", exc)
 
     # ------------------------------------------------------------------
     # Step 1 — Welcome
