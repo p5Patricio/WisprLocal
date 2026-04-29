@@ -1,0 +1,6 @@
+2026-04-29 14:31:31,188 INFO WisprLocal iniciando... PTT: f9 | Toggle: f10
+2026-04-29 14:31:31,224 INFO Cargando modelo large-v3 en cuda...
+2026-04-29 14:31:31,322 INFO Tray iniciado.
+2026-04-29 14:31:31,772 INFO HTTP Request: GET https://huggingface.co/api/models/Systran/faster-whisper-large-v3/revision/main "HTTP/1.1 200 OK"
+2026-04-29 14:31:37,858 INFO Modelo cargado y listo.
+2026-04-29 14:32:21,440 WARNING customtkinter no disponible; settings GUI desactivado

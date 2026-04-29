@@ -6,6 +6,7 @@ import logging
 import pathlib
 import sys
 import threading
+import time
 import tkinter as tk
 from typing import Callable
 
@@ -35,13 +36,14 @@ def _load_icon(name: str, fallback_color: str) -> Image.Image:
     return image
 
 
-def _update_tray_icon(icon, state: AppState) -> None:
+def _update_tray_icon(icon, state: AppState, config: dict | None = None) -> None:
+    ptt_key = config["hotkeys"]["ptt"] if config else "PTT"
     if state.get_loading():
         icon.icon = _load_icon("tray_loading.png", "yellow")
         icon.title = "WisprLocal \u2014 Cargando modelo..."
     elif state.model is not None:
         icon.icon = _load_icon("tray_ready.png", "green")
-        icon.title = "WisprLocal \u2014 Listo | PTT: CapsLock"
+        icon.title = f"WisprLocal \u2014 Listo | PTT: {ptt_key}"
     else:
         icon.icon = _load_icon("tray_idle.png", "gray")
         icon.title = "WisprLocal \u2014 Sin modelo (clic derecho para cargar)"
@@ -67,11 +69,11 @@ def start_tray(
 
     def _load(_icon, _item):
         on_load()
-        _update_tray_icon(icon, state)
+        _update_tray_icon(icon, state, config)
 
     def _unload(_icon, _item):
         on_unload()
-        _update_tray_icon(icon, state)
+        _update_tray_icon(icon, state, config)
 
     def _quit(_icon, _item):
         state.shutdown_event.set()
@@ -95,6 +97,26 @@ def start_tray(
         pystray.MenuItem("Salir", _quit),
     )
 
+    def _poll_state() -> None:
+        """Actualiza el ícono de bandeja cuando cambia el estado del modelo."""
+        last_status: str | None = None
+        while not state.shutdown_event.is_set():
+            if state.get_loading():
+                current = "loading"
+            elif state.model is not None:
+                current = "ready"
+            else:
+                current = "idle"
+            if current != last_status:
+                try:
+                    _update_tray_icon(icon, state, config)
+                except Exception:
+                    pass
+                last_status = current
+            time.sleep(0.5)
+
+    poller = threading.Thread(target=_poll_state, daemon=True, name="tray-poller")
+    poller.start()
     logger.info("Tray iniciado.")
     try:
         icon.run()

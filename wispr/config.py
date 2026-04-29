@@ -213,8 +213,16 @@ def detect_optimal_model(config: dict) -> str:
 
 
 def is_first_run(path: str = "config.toml") -> bool:
-    """Retorna True si el archivo de configuración no existe."""
-    return not pathlib.Path(path).exists()
+    """Retorna True si no hay config o si app.first_run es True."""
+    p = pathlib.Path(path)
+    if not p.exists():
+        return True
+    try:
+        with open(p, "rb") as f:
+            cfg = tomllib.load(f)
+        return cfg.get("app", {}).get("first_run", True)
+    except Exception:
+        return True
 
 
 def write_config(path: str, config_dict: dict) -> None:

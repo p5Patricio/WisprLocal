@@ -32,6 +32,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['C:\\Users\\Usuario\\Documents\\WisprLocal\\assets\\icons\\app.ico'],
 )
 coll = COLLECT(
     exe,
