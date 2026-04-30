@@ -69,11 +69,9 @@ def start_tray(
 
     def _load(_icon, _item):
         on_load()
-        _update_tray_icon(icon, state, config)
 
     def _unload(_icon, _item):
         on_unload()
-        _update_tray_icon(icon, state, config)
 
     def _quit(_icon, _item):
         state.shutdown_event.set()
@@ -90,15 +88,22 @@ def start_tray(
         except Exception as exc:
             logger.warning("No se pudo abrir SettingsGUI: %s", exc)
 
-    icon.menu = pystray.Menu(
-        pystray.MenuItem("Cargar modelo", _load),
-        pystray.MenuItem("Descargar modelo", _unload),
-        pystray.MenuItem("Configuración", _settings),
-        pystray.MenuItem("Salir", _quit),
-    )
+    def _build_menu() -> pystray.Menu:
+        """Construye el menú dinámicamente según el estado del modelo."""
+        items: list = []
+        if state.model is not None:
+            items.append(pystray.MenuItem("Descargar modelo", _unload))
+        else:
+            items.append(pystray.MenuItem("Cargar modelo", _load))
+        items.append(pystray.MenuItem("Configuración", _settings))
+        items.append(pystray.MenuItem("Salir", _quit))
+        return pystray.Menu(*items)
+
+    # Menú inicial
+    icon.menu = _build_menu()
 
     def _poll_state() -> None:
-        """Actualiza el ícono de bandeja cuando cambia el estado del modelo."""
+        """Actualiza el ícono y el menú de bandeja cuando cambia el estado del modelo."""
         last_status: str | None = None
         while not state.shutdown_event.is_set():
             if state.get_loading():
@@ -110,6 +115,7 @@ def start_tray(
             if current != last_status:
                 try:
                     _update_tray_icon(icon, state, config)
+                    icon.menu = _build_menu()
                 except Exception:
                     pass
                 last_status = current
