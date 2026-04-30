@@ -1,54 +1,56 @@
 # WisprLocal
 
-Dictado por voz local, sin nube, bilingüe español/inglés. Transcribe con Whisper en tu GPU y pega el texto donde estés escribiendo.
+Dictado por voz local, sin nube, bilingüe español/inglés. Apretás una tecla, hablás, y el texto aparece donde estés escribiendo. Usa OpenAI Whisper corriendo en tu GPU — tu voz nunca sale de tu computadora.
 
 ![Python](https://img.shields.io/badge/python-3.12+-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-Fase%203%20%E2%9C%85-brightgreen)
 ![GitHub release](https://img.shields.io/github/v/release/p5Patricio/WisprLocal)
-![Downloads](https://img.shields.io/github/downloads/p5Patricio/WisprLocal/total)
-![Stars](https://img.shields.io/github/stars/p5Patricio/WisprLocal?style=social)
 
 ---
 
-## 🚀 Aplicación de escritorio profesional
+## 🎯 Para quién es esto
 
-WisprLocal no es un script más: es una **aplicación de escritorio completa** con:
-
-- Instalador gráfico con detección automática de hardware
-- Asistente de primer uso (onboarding) interactivo
-- Configuración visual con pestañas (modelo, audio, hotkeys, overlay)
-- Icono en bandeja del sistema con estados visuales
-- Verificación automática de actualizaciones desde GitHub Releases
-- Empaquetado con PyInstaller para distribución sin Python
+- **Programadores** que dictan código, commits, documentación
+- **Escritores** que quieren fluidez sin interrupciones
+- **Gamers** que necesitan dictar en chat mientras juegan
+- **Profesionales bilingües** que hablan Spanglish técnico
+- **Cualquiera** que valore la privacidad y no quiera mandar su voz a la nube
 
 ---
 
-## ¿Qué es WisprLocal?
+## ⚡ Cómo funciona
 
-- **Local y privado** — todo corre en tu máquina, ningún audio sale a internet
-- **Bilingüe real** — el modelo `large-v3` maneja Spanglish técnico sin problemas
-- **Gaming-friendly** — el modelo se puede descargar desde la bandeja liberando VRAM al instante
-- **Se pega donde escribís** — inyecta el texto en cualquier app vía clipboard, sin plugins
-- **Inteligente** — detecta tu hardware y sugiere el modelo óptimo automáticamente
-- **Tu clipboard está a salvo** — restauramos tu contenido previo después de cada dictado
+1. **Apretás F9** (o la tecla que configures) y hablás
+2. **Soltás F9** y WisprLocal transcribe tu voz a texto con Whisper
+3. **El texto aparece** automáticamente donde estés escribiendo — Notion, VS Code, WhatsApp, el juego que sea
 
----
-
-## 📸 Screenshots
-
-| Splash | Configuración | Onboarding |
-|--------|--------------|------------|
-| ![Splash](docs/screenshots/splash.png) | ![Settings](docs/screenshots/settings.png) | ![Onboarding](docs/screenshots/onboarding.png) |
-
-> 💡 Las imágenes se agregan en `docs/screenshots/`. ¡Contribuciones visuales son bienvenidas!
+No copiar y pegar. No cambiar de ventana. Apretás, hablás, soltás, y listo.
 
 ---
 
-## Instalación en 3 pasos
+## 🖥️ Dónde lo podés usar
 
-**Requisitos**: Python 3.12+, Windows 10/11, GPU NVIDIA (opcional pero recomendado)
+WisprLocal funciona con **cualquier aplicación de escritorio**:
+
+| Tipo | Apps compatibles |
+|------|-----------------|
+| **Editores de código** | VS Code, IntelliJ, Vim, Neovim |
+| **Notas** | Notion, Obsidian, Evernote, OneNote |
+| **Mensajería** | WhatsApp Web, Telegram, Slack, Discord |
+| **Documentos** | Word, Google Docs, LibreOffice |
+| **Juegos** | Cualquier juego con chat (el overlay muestra si está grabando) |
+| **Navegadores** | Chrome, Firefox, Edge (formularios, emails, etc.) |
+| **Terminales** | PowerShell, Terminal, CMD, WSL |
+
+> ⚠️ Algunas apps que corren como Administrador (elevadas) pueden bloquear la inyección de texto. Si no funciona en una app específica, probá primero en Notepad para confirmar.
+
+---
+
+## 🚀 Instalación
+
+**Requisitos**: Python 3.12+, Windows 10/11 (Linux y macOS también soportados), GPU NVIDIA recomendada.
 
 ```powershell
 # 1. Clonar el repo
@@ -58,13 +60,13 @@ cd WisprLocal
 # 2. Correr el instalador gráfico
 python installer/gui_installer.py
 
-# 3. Abrir WisprLocal
-# Doble clic en lanzador.vbs  (sin ventana de consola)
-# — o desde terminal:
-.venv\Scripts\python.exe -m wispr
+# 3. Ejecutar WisprLocal (sin terminal)
+# Opción A: Doble clic en lanzador.vbs
+# Opción B: Desde terminal:
+.venv\Scripts\pythonw.exe -m wispr
 ```
 
-El instalador detecta tu GPU automáticamente e instala PyTorch con CUDA si corresponde. También pregunta si querés que WisprLocal inicie con Windows.
+El instalador detecta tu GPU automáticamente y configura todo. En el primer uso te guía con un wizard paso a paso.
 
 ### Requisitos de hardware por modelo
 
@@ -76,7 +78,69 @@ El instalador detecta tu GPU automáticamente e instala PyTorch con CUDA si corr
 | `medium` | ~5 GB | ~8 GB | Lento | Excelente |
 | `large-v3` | ~10 GB | ~16 GB | Muy lento | La mejor |
 
-> 💡 Con `name = "auto"` en `config.toml`, WisprLocal detecta tu hardware y elige el mejor modelo que pueda correr cómodamente.
+> 💡 Con `name = "auto"`, WisprLocal detecta tu hardware y elige el mejor modelo que pueda correr.
+
+---
+
+## ⌨️ Cómo usar
+
+### Primer uso
+
+La primera vez que ejecutás WisprLocal aparece un **wizard de bienvenida** que te guía por:
+
+1. **Bienvenida** — presentación rápida
+2. **Hardware** — detecta tu GPU y RAM, sugiere modelo óptimo
+3. **Micrófono** — test de grabación de 3 segundos para verificar que funciona
+4. **Hotkeys** — capturás la tecla que querés usar (por defecto F9)
+5. **Inicio automático** — elegís si querés que inicie con Windows
+6. **Tutorial** — resumen de cómo usarlo
+
+### Uso diario
+
+| Acción | Tecla | Qué hace |
+|--------|-------|----------|
+| **Push-to-Talk** | Mantené presionada **F9** | Grabás mientras la mantenés presionada, soltás para transcribir |
+| **Toggle** | Apretá **F10** | Empezás a grabar, apretás de nuevo para transcribir |
+| **Cargar modelo** | Click derecho en tray → "Cargar modelo" | Carga Whisper en memoria (toma ~10 segundos) |
+| **Descargar modelo** | Click derecho en tray → "Descargar modelo" | Libera VRAM para jugar o renderizar |
+| **Configuración** | Click derecho en tray → "Configuración" | Abrís la ventana de settings |
+| **Salir** | Click derecho en tray → "Salir" | Cierra todo graceful |
+
+### Icono de bandeja (estados)
+
+| Color | Significado |
+|-------|-------------|
+| 🔘 **Gris** | Sin modelo cargado — hacé clic derecho → "Cargar modelo" |
+| 🟡 **Amarillo** | Cargando modelo — esperá unos segundos |
+| 🟢 **Verde** | Listo para dictar — apretá F9 y hablá |
+
+### Overlay visual
+
+Cuando grabás, aparece un indicador flotante en la esquina que elegiste (por defecto abajo a la derecha) para que sepas que está escuchando, incluso en juegos a pantalla completa.
+
+---
+
+## ⚙️ Configuración
+
+Hacé clic derecho en el ícono de bandeja → **Configuración**. Se abre una ventana con pestañas:
+
+- **Modelo** — qué modelo Whisper usar, dispositivo (CUDA/CPU), tipo de cómputo
+- **Audio** — sample rate, canales, tamaño de cola
+- **Hotkeys** — configurá las teclas PTT, Toggle y Cargar modelo (con captura en vivo)
+- **Overlay** — activar/desactivar, posición, opacidad, tamaño de fuente
+- **Historial** — lista de transcripciones previas con timestamp, copiar al clipboard, limpiar
+- **Sistema** — activar/desactivar inicio automático con Windows/Linux/macOS
+
+Los cambios se aplican al reiniciar WisprLocal.
+
+---
+
+## 🔒 Privacidad
+
+- **100% offline** — ningún audio, metadato ni texto sale de tu máquina
+- **Sin cuentas** — no necesitás login, API key ni suscripción
+- **Sin nube** — Whisper corre localmente en tu GPU
+- **Código abierto (MIT)** — podés auditar cada línea
 
 ---
 
@@ -89,112 +153,34 @@ El instalador detecta tu GPU automáticamente e instala PyTorch con CUDA si corr
 | **Inyección automática** | ✅ | ❌ | ❌ | ❌ |
 | **Overlay visual** | ✅ | ❌ | ❌ | ❌ |
 | **Gestión de VRAM** | ✅ | N/A | ❌ | N/A |
+| **Historial de dictados** | ✅ | ✅ | ❌ | ❌ |
+| **Inicio automático** | ✅ | ❌ | ❌ | ✅ |
 | **Código abierto** | ✅ | ❌ | ✅ | ❌ |
 | **Sin suscripción** | ✅ | ❌ | ✅ | ✅ |
 | **Cross-platform** | ✅ | ✅ | ❌ | ❌ |
 
 ---
 
-## Configuración
-
-Editá `config.toml` en la raíz del proyecto. Los cambios se aplican al reiniciar.
-
-```toml
-[model]
-name = "auto"              # "auto" = detectar hardware | tiny / base / small / medium / large-v2 / large-v3
-device = "cuda"            # cuda | cpu
-compute_type = "int8_float16"  # float16 | int8_float16 | int8
-
-[audio]
-sample_rate = 16000
-channels = 1
-dtype = "float32"
-queue_maxsize = 100        # chunks máximos en memoria (drop-oldest si se llena)
-
-[hotkeys]
-ptt    = "f9"              # mantener presionada para grabar
-toggle = "f10"             # presionar para iniciar, volver a presionar para detener
-
-[transcription]
-language = ""              # "" = detección automática (recomendado para Spanglish)
-min_duration = 0.3         # segundos mínimos de audio para transcribir
-beam_size = 1              # 1 = más rápido, más = más preciso
-vad_parameters = {}        # ej: { min_silence_duration_ms = 500, speech_pad_ms = 200 }
-
-[overlay]
-enabled  = true
-position = "bottom-right"  # bottom-right | bottom-left | top-right | top-left
-opacity = 0.85
-font_size = 14
-```
-
----
-
-## Teclas por defecto
-
-| Acción | Tecla | Comportamiento |
-|--------|-------|---------------|
-| Push-to-Talk | `F9` | Mantener presionada mientras hablás, soltar para transcribir |
-| Toggle | `F10` | Presionar para iniciar, presionar de nuevo para transcribir |
-
-Ambas teclas son configurables desde `config.toml`. El texto transcripto queda también en el clipboard para pegarlo manualmente si querés.
-
----
-
-## Novedades Fase 1 — Reliability & Thread Safety
-
-Esta versión trae mejoras fundamentales de robustez:
-
-- ✅ **Thread-safety completo** — AppState protegido con locks, cero race conditions
-- ✅ **Cierre graceful** — todos los threads se unen ordenadamente al salir, sin matar procesos
-- ✅ **Cola de audio acotada** — nunca más crecimiento de RAM infinito (`maxsize=100`, drop-oldest)
-- ✅ **Clipboard protegido** — tu contenido previo se guarda y restaura automáticamente
-- ✅ **VAD integrado** — Voice Activity Detection elimina transcripciones de silencio y ruido
-- ✅ **Detección automática de hardware** — sugiere el modelo Whisper óptimo según tu GPU/CPU
-- ✅ **Overlay con estados de error** — feedback visual claro cuando algo falla
-- ✅ **Errores estructurados** — excepciones propias con mensajes en español entendibles
-
-## Novedades Fase 2 — Cross-platform
-
-- ✅ **Windows / Linux / macOS** — abstracción de plataforma completa
-- ✅ **Atajos de pegado adaptativos** — Ctrl+V o Cmd+V según el OS
-- ✅ **Beep nativo** — winsound, osascript o beep según la plataforma
-- ✅ **Lanzadores nativos** — .vbs en Windows, .sh en Linux/macOS
-- ✅ **Inicio automático** — Startup folder, systemd user service, LaunchAgent
-
-## Novedades Fase 3 — GUI Installer + Branding profesional
-
-- ✅ **Instalador gráfico standalone** — wizard de 5 pasos con detección de hardware
-- ✅ **Onboarding interactivo** — primer uso guiado: mic test, captura de hotkeys, tutorial
-- ✅ **Configuración visual** — tabs para modelo, audio, hotkeys y overlay
-- ✅ **Splash screen** — feedback visual durante la carga del modelo
-- ✅ **Bandeja mejorada** — íconos reales (microphone silhouette) con estados coloridos
-- ✅ **Verificación de updates** — consulta GitHub Releases y muestra diálogo de actualización
-- ✅ **Build con PyInstaller** — `python tools/build.py` genera distribución portable
-- ✅ **Branding profesional** — íconos multi-formato (.ico, .icns, .png) generados programáticamente
-
----
-
-## Troubleshooting
+## 🛠️ Troubleshooting
 
 **El modelo no carga / error de CUDA**
-Verificá que tenés drivers NVIDIA actualizados (`nvidia-smi` en terminal). Si el problema persiste, cambiá `device = "cpu"` en config.toml.
+Verificá que tenés drivers NVIDIA actualizados (`nvidia-smi` en terminal). Si el problema persiste, cambiá `device = "cpu"` en Configuración.
 
 **No graba cuando presiono la tecla**
-El modelo tarda ~10 segundos en cargar al arrancar. Esperá el beep doble (señal de "listo") antes de grabar. Si el ícono en tray es gris, usá clic derecho → "Cargar modelo".
+Esperá a que el ícono de bandeja esté 🟢 verde. El modelo tarda ~10 segundos en cargar al arrancar.
 
 **El texto no se pega en la aplicación**
-Algunas apps con foco en ventanas elevadas (admin) bloquean la simulación de teclado. Probá en Notepad primero para confirmar que la transcripción funciona. Si funciona ahí pero no en tu app, el problema es de permisos de la app destino.
+Algunas apps elevadas (admin) bloquean la simulación de teclado. Probá en Notepad primero.
 
 **El overlay no aparece**
-Verificá que `overlay.enabled = true` en config.toml. El overlay no funciona sobre juegos en pantalla completa exclusiva (fullscreen exclusivo de DirectX).
+Verificá que esté habilitado en Configuración → Overlay. No funciona sobre juegos en fullscreen exclusivo de DirectX.
 
-**Tecla inválida en config.toml**
-La app muestra el error al arrancar con las opciones válidas. Teclas soportadas: `caps_lock`, `f1`–`f12`, `scroll_lock`, `pause`, `insert`, `home`, `end`, letras sueltas (`a`–`z`).
+**WisprLocal no aparece en la bandeja**
+Si ejecutaste con `python.exe` en vez de `pythonw.exe`, la terminal se cierra y mata el proceso. Usá `pythonw.exe` o hacé doble clic en `lanzador.vbs`.
 
 ---
 
-## Arquitectura
+## 🏗️ Arquitectura (para developers)
 
 ```
 wispr/
@@ -206,20 +192,19 @@ wispr/
 ├── transcription.py # modelo Whisper, VAD y worker de transcripción
 ├── injection.py     # clipboard + Ctrl+V con preservación de contenido
 ├── overlay.py       # indicador visual (tkinter, siempre encima)
-├── tray.py          # ícono en system tray (pystray)
+├── tray.py          # ícono en system tray (pystray) con menú condicional
+├── history.py       # persistencia de transcripciones en JSONL
 ├── sounds.py        # feedback auditivo (winsound)
 ├── errors.py        # jerarquía de excepciones propias
 ├── splash.py        # splash screen de carga (customtkinter)
-├── settings_gui.py  # ventana de configuración con tabs
-├── onboarding.py    # wizard de primer uso
+├── settings_gui.py  # ventana de configuración con 6 tabs
+├── onboarding.py    # wizard de primer uso de 6 pasos
+├── platform/        # abstracción cross-platform (Windows/Linux/macOS)
+│   ├── base.py
+│   ├── windows.py
+│   ├── linux.py
+│   └── macos.py
 └── updater.py       # verificación de actualizaciones desde GitHub
-
-installer/
-└── gui_installer.py # instalador gráfico standalone
-
-tools/
-├── generate_icons.py # genera íconos de marca (.ico, .icns, .png)
-└── build.py          # script de build con PyInstaller
 ```
 
 **Modelo de threads**
@@ -229,24 +214,22 @@ tools/
 | Main | Coordina shutdown, corre system tray y mainloop de tkinter |
 | pynput | Escucha teclado, actualiza `AppState` vía getters/setters atómicos |
 | PortAudio | Captura audio, encola chunks en `audio_queue` (bounded) |
-| transcription_worker | Espera sentinel, transcribe con VAD, inyecta |
+| transcription_worker | Espera sentinel, transcribe con VAD, inyecta, guarda historial |
 | overlay | Corre `tk.mainloop()`, recibe updates vía `root.after()` |
 | loader | Carga el modelo al arrancar (daemon) |
-| tray | Ejecuta `pystray.Icon.run()` en daemon thread |
-
-Todos los threads se comunican a través de `AppState` (thread-safe) y `audio_queue` — con locks para estado mutable y señal de shutdown vía `threading.Event`.
+| tray | Ejecuta `pystray.Icon.run()` en daemon thread + polling de estado |
 
 ---
 
-## Roadmap
+## 📋 Roadmap
 
 - **Fase 1** ✅ — Reliability & Thread Safety
 - **Fase 2** ✅ — Cross-platform (Windows / Linux / macOS)
-- **Fase 3** ✅ — GUI Installer + Branding profesional
+- **Fase 3** ✅ — GUI Installer + Branding profesional + Historial + Autostart
 
 ---
 
-## Contribuir
+## 🤝 Contribuir
 
 Este proyecto usa [Conventional Commits](https://www.conventionalcommits.org/):
 
@@ -257,18 +240,4 @@ refactor: cambio de código sin nuevo comportamiento
 chore: limpieza, dependencias, config
 ```
 
-Estructura del proyecto:
-
-```
-WisprLocal/
-├── wispr/           # paquete principal
-├── installer/       # instalador gráfico standalone
-├── tools/           # scripts de utilidad (build, icons, diagnóstico)
-├── assets/          # íconos y recursos visuales
-├── install.py       # instalador automatizado (legacy)
-├── requirements.txt # dependencias (sin torch — install.py lo maneja)
-├── sdd/             # documentación de cambios (Spec-Driven Development)
-└── config.toml      # configuración local (no commitear)
-```
-
-`config.toml` está en `.gitignore` — `install.py` lo genera con defaults si no existe.
+`config.toml` está en `.gitignore` — se genera con defaults si no existe.
