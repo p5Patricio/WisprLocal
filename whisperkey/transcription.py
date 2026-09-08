@@ -8,6 +8,7 @@ import pathlib
 import re
 import sys
 import tempfile
+import threading
 import wave
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -47,6 +48,18 @@ VAD_MODEL_NAME = "ggml-silero-v5.1.2.bin"
 # Below this RMS the audio is treated as silence/noise and skipped (Whisper
 # tends to hallucinate on near-silent input).
 _SILENCE_RMS_THRESHOLD = 0.004
+
+# Long dictations used to be a single wait at the end: nothing was transcribed
+# until the user stopped talking, so a three-minute recording meant staring at
+# an indicator for seconds. Once a recording passes this length it is cut at a
+# natural pause and the finished part is transcribed while the user keeps
+# speaking, so only the last segment is still pending on release.
+_SEGMENT_AFTER_S = 25.0
+# Window at the end of the buffer searched for that pause.
+_SEGMENT_SEARCH_S = 6.0
+# A chunk quieter than this counts as a pause. Cutting on silence is what makes
+# the split safe: a cut inside a word would come back as two words.
+_SEGMENT_SILENCE_RMS = 0.015
 
 # Loudness normalization: quiet microphones degrade recognition, but peak
 # normalization lets a single click set the scale and amplifies the noise floor
@@ -440,16 +453,97 @@ def _prepare_wav(
 
 
 def clean_transcription(text: str) -> str:
-    """Strip whisper non-speech markers (music/blank-audio/etc.) from *text*."""
+    """Strip whisper non-speech markers (music/blank-audio/etc.) from *text*.
+
+    Segments are concatenated, never joined with a space. whisper.cpp opens a
+    new segment at token boundaries, and Whisper's tokenizer splits words into
+    subword tokens, so a segment break lands mid-word often enough to matter
+    ("dedic" + "ación"). Each segment already carries its own leading space when
+    it starts a new word and none when it continues one, so that spacing is the
+    signal: stripping it and re-joining with " " is what produced "pala bras".
+    """
     out: list[str] = []
+    dropped_between = False
+
     for raw in text.replace("\r", "").split("\n"):
-        segment = _NONSPEECH.sub("", raw).strip()
-        if not segment:
+        segment = _NONSPEECH.sub("", raw)
+        stripped = segment.strip()
+        if not stripped or _BRACKET_TOKEN.match(stripped):
+            # A discarded segment was still a real boundary between the words
+            # around it; remember it so they do not get glued together.
+            dropped_between = True
             continue
-        if _BRACKET_TOKEN.match(segment):
-            continue
+
+        if out and dropped_between and not _touching_whitespace(out[-1], segment):
+            out.append(" ")
         out.append(segment)
-    return re.sub(r"\s+", " ", " ".join(out)).strip()
+        dropped_between = False
+
+    return re.sub(r"[^\S\n]+", " ", "".join(out)).strip()
+
+
+def _touching_whitespace(left: str, right: str) -> bool:
+    """True if joining *left* and *right* already keeps them separated."""
+    return left[-1:].isspace() or right[:1].isspace()
+
+
+def _chunk_rms(chunk) -> float:
+    """RMS de un bloque de audio, tolerante a mono o multicanal."""
+    arr = np.asarray(chunk, dtype=np.float32)
+    if arr.size == 0:
+        return 0.0
+    return float(np.sqrt(np.mean(np.square(arr))))
+
+
+def find_pause_split(
+    buffer: list,
+    sample_rate: int,
+    search_seconds: float = _SEGMENT_SEARCH_S,
+    silence_rms: float = _SEGMENT_SILENCE_RMS,
+) -> int | None:
+    """Índice donde cortar el buffer, o None si no hay una pausa clara.
+
+    Busca el bloque más silencioso dentro de la ventana final. Cortar en
+    silencio es lo que hace seguro el corte: un corte dentro de una palabra
+    vuelve partido en dos, que es exactamente el defecto que se acaba de
+    eliminar del pegado de segmentos.
+    """
+    if len(buffer) < 2:
+        return None
+
+    frames_per_chunk = max(1, len(buffer[-1]))
+    search_chunks = max(1, int(search_seconds * sample_rate / frames_per_chunk))
+    start = max(1, len(buffer) - search_chunks)
+
+    best_idx: int | None = None
+    best_rms = silence_rms
+    for i in range(start, len(buffer)):
+        rms = _chunk_rms(buffer[i])
+        if rms < best_rms:
+            best_rms = rms
+            best_idx = i
+    return best_idx
+
+
+class _DictationParts:
+    """Texto de una dictado repartido en segmentos, en orden."""
+
+    def __init__(self) -> None:
+        self._parts: list[str] = []
+        self._lock = threading.Lock()
+
+    def add(self, text: str) -> None:
+        if text:
+            with self._lock:
+                self._parts.append(text)
+
+    def drain(self, last: str) -> str:
+        with self._lock:
+            parts = list(self._parts)
+            self._parts.clear()
+        if last:
+            parts.append(last)
+        return " ".join(p for p in parts if p).strip()
 
 
 def _transcribe_buffer(
@@ -463,6 +557,8 @@ def _transcribe_buffer(
     language: str | None,
     prompt: str,
     overlay=None,
+    parts: "_DictationParts | None" = None,
+    is_final: bool = True,
 ) -> None:
     """Transcribe an accumulated buffer and inject the result.
 
@@ -471,38 +567,66 @@ def _transcribe_buffer(
     chunks of whatever the user records next.
     """
     logger.info("Procesando buffer de %d chunks", len(buffer))
+
+    # The overlay is showing "transcribing" from the moment the key was
+    # released, so every exit path below has to resolve it. Leaving it on would
+    # be worse than never showing it.
+    def _clear_overlay() -> None:
+        if overlay is not None:
+            overlay.hide()
+
+    def _fail_overlay(message: str) -> None:
+        if overlay is not None:
+            overlay.show_error(message)
+
+    def _deliver(text: str) -> None:
+        """Acumula el segmento; sólo el último entrega el dictado completo."""
+        if parts is not None and not is_final:
+            parts.add(text)
+            return
+        full = parts.drain(text) if parts is not None else text
+        if not full:
+            logger.warning("Transcripción vacía tras limpieza (no se reconoció voz).")
+            _clear_overlay()
+            return
+        logger.info("Transcripción exitosa: %s", full)
+        _clear_overlay()
+        injection_fn(full)
+        sounds.play_done()
+        add_entry(full)
+        trim()
+
     if not buffer:
         logger.warning("No hay audio acumulado para transcribir.")
+        if is_final:
+            _deliver("")
+        else:
+            _clear_overlay()
         return
 
     server = state.get_model()
     if server is None:
         logger.error("No se puede transcribir: el motor no está cargado.")
-        if overlay is not None:
-            overlay.show_error("El motor de transcripción no está cargado.")
+        _fail_overlay("El motor de transcripción no está cargado.")
         return
 
     temp_path = _prepare_wav(buffer, sample_rate, min_frames, channels)
     if temp_path is None:
+        if is_final:
+            _deliver("")
+        else:
+            _clear_overlay()
         return
 
     try:
         raw = server.transcribe(
             pathlib.Path(temp_path), prompt=prompt, language=language
         )
-        text = clean_transcription(raw)
-        if text:
-            logger.info("Transcripción exitosa: %s", text)
-            injection_fn(text)
-            add_entry(text)
-            trim()
-        else:
-            logger.warning("Transcripción vacía tras limpieza (no se reconoció voz).")
+        _deliver(clean_transcription(raw))
     except Exception as exc:
         logger.exception("Error en transcripción")
         sounds.play_error()
-        if overlay is not None:
-            overlay.show_error(f"Error de transcripción: {exc}")
+        _fail_overlay(f"Error de transcripción: {exc}")
     finally:
         try:
             os.unlink(temp_path)
@@ -536,15 +660,22 @@ def transcription_worker(
     language: str | None = transcription_cfg.get("language") or None
     prompt: str = transcription_cfg.get("prompt", "")
 
+    segment_after_frames = int(_SEGMENT_AFTER_S * sample_rate)
+
+    # Single slot: segments of one dictation stay strictly in order, so the
+    # final one always runs last and can assemble the whole text.
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="whisperkey-infer")
 
-    def dispatch(chunks: list) -> None:
-        if not chunks:
+    parts = _DictationParts()
+
+    def dispatch(chunks: list, is_final: bool = True) -> None:
+        if not chunks and not is_final:
             return
         executor.submit(
             _transcribe_buffer,
             chunks, state, injection_fn, sounds,
             sample_rate, min_frames, channels, language, prompt, overlay,
+            parts, is_final,
         )
 
     buffer: list = []
@@ -553,16 +684,18 @@ def transcription_worker(
         while not state.shutdown_event.is_set():
             chunk = state.audio_queue.get()
             if chunk is None:
-                dispatch(buffer)
+                dispatch(buffer, is_final=True)
                 buffer = []
                 total_frames = 0
             elif isinstance(chunk, str) and chunk == "RESET":
                 logger.info("Señal de RESET: vaciando buffer sin procesar.")
+                parts.drain("")
                 buffer = []
                 total_frames = 0
             else:
                 buffer.append(chunk)
                 total_frames += len(chunk)
+
                 if max_duration > 0 and (total_frames / sample_rate) >= max_duration:
                     logger.warning(
                         "Duración máxima de grabación alcanzada (%.1fs). Forzando corte.",
@@ -570,8 +703,23 @@ def transcription_worker(
                     )
                     state.stop_recording()
                     sounds.play_stop()
-                    dispatch(buffer)
+                    dispatch(buffer, is_final=True)
                     buffer = []
                     total_frames = 0
+                    continue
+
+                # Dictado largo: adelantar el trabajo cortando en una pausa, de
+                # modo que al soltar la tecla sólo quede pendiente el último
+                # tramo en lugar de la grabación entera.
+                if total_frames >= segment_after_frames:
+                    split = find_pause_split(buffer, sample_rate)
+                    if split is not None:
+                        head, buffer = buffer[:split], buffer[split:]
+                        logger.info(
+                            "Dictado largo: transcribiendo %.1fs mientras seguís hablando.",
+                            sum(len(c) for c in head) / sample_rate,
+                        )
+                        dispatch(head, is_final=False)
+                        total_frames = sum(len(c) for c in buffer)
     finally:
         executor.shutdown(wait=False)

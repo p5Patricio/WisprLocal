@@ -29,6 +29,7 @@ DEFAULTS = {
         "ptt": "f9",
         "toggle": "f10",
         "load_model_key": "",
+        "cancel": "esc",
     },
     "overlay": {
         "enabled": True,
@@ -87,6 +88,9 @@ ptt = "f9"
 toggle = "f10"
 # (Opcional) Tecla para cargar/descargar el modelo manualmente. Dejar vacío para desactivar.
 load_model_key = ""
+# Tecla para descartar el dictado en curso sin transcribirlo.
+# Sólo actúa mientras se está grabando. Dejar vacío para desactivar.
+cancel = "esc"
 
 [overlay]
 # Mostrar indicador visual de grabación en pantalla
@@ -191,6 +195,10 @@ def _validate(config: dict) -> None:
     language = tcfg.get("language", "")
     if not isinstance(language, str):
         raise ValueError("transcription.language debe ser un string ('' = automático)")
+
+    cancel = config["hotkeys"].get("cancel", "")
+    if not isinstance(cancel, str):
+        raise ValueError("hotkeys.cancel debe ser un string ('' = desactivado)")
 
     valid_positions = ("bottom-right", "bottom-left", "top-right", "top-left")
     if config["overlay"]["position"] not in valid_positions:

@@ -3,6 +3,11 @@
 Corre en su propio thread daemon. Todas las actualizaciones al widget
 deben hacerse via `root.after(0, fn)` — NUNCA directamente desde otro thread.
 
+El indicador es una píldora oscura con un punto de estado a la izquierda. En
+Windows las esquinas son redondeadas de verdad: la ventana declara un color
+transparente y la píldora se dibuja sobre un canvas con ese color de fondo. En
+el resto de plataformas degrada a un rectángulo con el mismo aspecto.
+
 LIMITACIÓN CONOCIDA: el overlay NO aparece sobre aplicaciones en fullscreen
 exclusivo (juegos DirectX/OpenGL con exclusive fullscreen). Esto es una
 restricción del sistema de composición de Windows y no tiene solución desde
@@ -14,25 +19,72 @@ from __future__ import annotations
 import logging
 import threading
 import sys
+import time
 import tkinter as tk
 
 log = logging.getLogger(__name__)
 
-# Estados visuales del overlay — paleta alineada con dark theme de customtkinter
+# — Paleta: azul sobre negro —
+SURFACE = "#0B1020"       # fondo de la píldora, casi negro con matiz azul
+BORDER = "#1E293B"        # borde apenas perceptible, da profundidad sin ruido
+TEXT = "#E6EDFB"
+TEXT_MUTED = "#94A3B8"
+# Color clave para transparencia en Windows; no debe aparecer en el diseño.
+_TRANSPARENT_KEY = "#FF00FE"
+
+# Estados visuales. `dot` es el punto de estado; `pulse` anima su intensidad.
 STATES: dict[str, dict | None] = {
-    "ptt":     {"text": "\u2b24  Escuchando...", "bg": "#EF4444", "fg": "white"},
-    "toggle":  {"text": "\u2b24  Grabando...",   "bg": "#F97316", "fg": "white"},
-    "loading": {"text": "\u23f3 Cargando...",   "bg": "#6B7280", "fg": "white"},
-    "error":   {"text": "\u274c  Error",        "bg": "#DC2626", "fg": "white"},
-    "hidden":  None,
+    "ptt":        {"text": "Escuchando",    "dot": "#3B82F6", "fg": TEXT,       "pulse": True},
+    "toggle":     {"text": "Grabando",      "dot": "#60A5FA", "fg": TEXT,       "pulse": True},
+    "processing": {"text": "Transcribiendo", "dot": "#38BDF8", "fg": TEXT,       "pulse": False},
+    "loading":    {"text": "Preparando",    "dot": "#64748B", "fg": TEXT_MUTED, "pulse": True},
+    "cancelled":  {"text": "Cancelado",     "dot": "#64748B", "fg": TEXT_MUTED, "pulse": False},
+    "error":      {"text": "Error",         "dot": "#F87171", "fg": TEXT,       "pulse": False},
+    "hidden":     None,
 }
 
-# Fuente compatible con customtkinter / Windows 11
+# Fotogramas del punto pulsante: del color pleno a una versión apagada.
+_PULSE_INTERVAL_MS = 90
+_PULSE_STEPS = 14
+
+# Animación del estado "processing": sin ella una transcripción larga parece una
+# app colgada, porque el usuario suelta la tecla y no ve nada hasta que llega el
+# texto.
+_PROCESSING_INTERVAL_MS = 400
+# A partir de acá el indicador suma los segundos transcurridos, para que una
+# espera larga se lea como progreso y no como algo trabado.
+_PROCESSING_ELAPSED_AFTER_S = 3.0
+# Un aviso puntual no debe dejar un cartel fijo sobre el escritorio.
+_ERROR_AUTO_HIDE_MS = 5000
+_CANCELLED_AUTO_HIDE_MS = 1200
+# Margen para que arranque el thread de tkinter.
+_STARTUP_TIMEOUT_S = 3.0
+
+# Geometría de la píldora
+_PAD_X = 15
+_PAD_Y = 9
+_DOT_RADIUS = 4
+_DOT_GAP = 10
+
 _OVERLAY_FONT = (
     "Segoe UI Variable" if sys.platform == "win32" else "Segoe UI",
     14,
-    "bold",
+    "normal",
 )
+
+
+def _blend(color: str, background: str, t: float) -> str:
+    """Interpola *color* hacia *background*. t=0 color pleno, t=1 fondo."""
+    def parts(c: str) -> tuple[int, int, int]:
+        c = c.lstrip("#")
+        return int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+
+    fr, fg, fb = parts(color)
+    br, bg, bb = parts(background)
+    r = round(fr + (br - fr) * t)
+    g = round(fg + (bg - fg) * t)
+    b = round(fb + (bb - fb) * t)
+    return f"#{r:02x}{g:02x}{b:02x}"
 
 
 class RecordingOverlay:
@@ -50,13 +102,29 @@ class RecordingOverlay:
         self._opacity: float = self._config.get("opacity", 0.85)
         self._font_size: int = self._config.get("font_size", 14)
         self.root: tk.Tk | None = None
+        self._canvas: tk.Canvas | None = None
         self._label: tk.Label | None = None
         self._ready = threading.Event()
+
+        self._anim_job: str | None = None
+        self._pulse_job: str | None = None
+        self._pulse_tick = 0
+        self._anim_tick = 0
+        self._anim_started = 0.0
+        self._dot_color = SURFACE
+        self._dot_item: int | None = None
 
         if self._enabled:
             t = threading.Thread(target=self._run, daemon=True, name="overlay")
             t.start()
-            self._ready.wait(timeout=3.0)  # esperar a que tkinter inicie
+            # Si tkinter tarda más que esto, el overlay queda a medio construir.
+            # Antes se seguía en silencio y el usuario se quedaba sin indicador
+            # sin ninguna pista de por qué.
+            if not self._ready.wait(timeout=_STARTUP_TIMEOUT_S):
+                log.warning(
+                    "El overlay no terminó de iniciar en %.0fs; puede no aparecer.",
+                    _STARTUP_TIMEOUT_S,
+                )
 
     # ------------------------------------------------------------------
     # Thread de tkinter
@@ -68,23 +136,81 @@ class RecordingOverlay:
         self.root.overrideredirect(True)           # sin bordes ni decoraciones
         self.root.wm_attributes("-topmost", True)  # siempre encima
         self.root.wm_attributes("-alpha", self._opacity)
-        self.root.configure(bg="#E53E3E")
+
+        canvas_bg = SURFACE
+        if sys.platform == "win32":
+            try:
+                self.root.wm_attributes("-transparentcolor", _TRANSPARENT_KEY)
+                canvas_bg = _TRANSPARENT_KEY
+            except Exception as exc:  # pragma: no cover - depende del compositor
+                log.debug("Sin transparencia por color clave: %s", exc)
+
+        self.root.configure(bg=canvas_bg)
+        self._canvas = tk.Canvas(
+            self.root, bg=canvas_bg, highlightthickness=0, bd=0
+        )
+        self._canvas.pack()
 
         self._label = tk.Label(
-            self.root,
+            self._canvas,
             text="",
             font=(_OVERLAY_FONT[0], self._font_size, _OVERLAY_FONT[2]),
-            fg="white",
-            bg="#EF4444",
-            padx=12,
-            pady=6,
+            fg=TEXT,
+            bg=SURFACE,
+            bd=0,
         )
-        self._label.pack()
 
-        # Ocultar hasta que se solicite un estado
         self.root.withdraw()
         self._ready.set()
         self.root.mainloop()
+
+    # ------------------------------------------------------------------
+    # Dibujo
+    # ------------------------------------------------------------------
+
+    def _rounded_pill(self, w: int, h: int, fill: str, outline: str) -> None:
+        """Dibuja una píldora de esquinas completamente redondeadas."""
+        assert self._canvas is not None
+        r = h // 2
+        c = self._canvas
+        c.create_oval(0, 0, 2 * r, h, fill=fill, outline=outline)
+        c.create_oval(w - 2 * r, 0, w, h, fill=fill, outline=outline)
+        c.create_rectangle(r, 0, w - r, h, fill=fill, outline=fill)
+        c.create_line(r, 0, w - r, 0, fill=outline)
+        c.create_line(r, h - 1, w - r, h - 1, fill=outline)
+
+    def _render(self, text: str, fg: str, dot: str) -> None:
+        """Redibuja la píldora completa. SOLO desde el thread de tkinter."""
+        if self.root is None or self._canvas is None or self._label is None:
+            return
+
+        self._label.config(text=text, fg=fg, bg=SURFACE)
+        self._label.update_idletasks()
+        tw = self._label.winfo_reqwidth()
+        th = self._label.winfo_reqheight()
+
+        w = _PAD_X + _DOT_RADIUS * 2 + _DOT_GAP + tw + _PAD_X
+        h = th + _PAD_Y * 2
+
+        self._canvas.delete("all")
+        self._dot_item = None
+        self._canvas.config(width=w, height=h)
+        self._rounded_pill(w, h, SURFACE, BORDER)
+
+        cx = _PAD_X + _DOT_RADIUS
+        cy = h // 2
+        # Se guarda el id del punto: buscarlo por posición en la lista de
+        # figuras se rompe en cuanto cambia el dibujo de la píldora.
+        self._dot_item = self._canvas.create_oval(
+            cx - _DOT_RADIUS, cy - _DOT_RADIUS,
+            cx + _DOT_RADIUS, cy + _DOT_RADIUS,
+            fill=dot, outline=dot,
+        )
+        self._canvas.create_window(
+            _PAD_X + _DOT_RADIUS * 2 + _DOT_GAP, cy, anchor="w", window=self._label
+        )
+        self._position_window(w, h)
+        self.root.deiconify()
 
     def _set_state(self, state_key: str, text: str | None = None) -> None:
         """Actualiza el estado visual. SOLO llamar desde el thread de tkinter."""
@@ -94,19 +220,16 @@ class RecordingOverlay:
         if state is None:
             self.root.withdraw()
             return
-        assert self._label is not None
-        display_text = text if text is not None else state["text"]
-        self._label.config(text=display_text, fg=state["fg"], bg=state["bg"])
-        self.root.configure(bg=state["bg"])
-        self._position_window()
-        self.root.deiconify()
+        self._dot_color = state["dot"]
+        self._render(
+            text if text is not None else state["text"], state["fg"], state["dot"]
+        )
+        if state.get("pulse"):
+            self._start_pulse()
 
-    def _position_window(self) -> None:
+    def _position_window(self, w: int, h: int) -> None:
         """Calcula y aplica la posición según la configuración."""
         assert self.root is not None
-        self.root.update_idletasks()
-        w = self.root.winfo_reqwidth()
-        h = self.root.winfo_reqheight()
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
         margin = 20
@@ -121,35 +244,112 @@ class RecordingOverlay:
         self.root.geometry(f"+{x}+{y}")
 
     # ------------------------------------------------------------------
+    # Animaciones — sólo en el thread de tkinter
+    # ------------------------------------------------------------------
+
+    def _cancel_jobs(self) -> None:
+        for attr in ("_anim_job", "_pulse_job"):
+            job = getattr(self, attr)
+            if job is not None and self.root is not None:
+                try:
+                    self.root.after_cancel(job)
+                except Exception:  # pragma: no cover - el job ya expiró
+                    pass
+            setattr(self, attr, None)
+
+    def _start_pulse(self) -> None:
+        self._pulse_tick = 0
+        self._tick_pulse()
+
+    def _tick_pulse(self) -> None:
+        """Respira el punto de estado entre su color pleno y uno apagado."""
+        if self.root is None or self._canvas is None:
+            return
+        phase = self._pulse_tick % (_PULSE_STEPS * 2)
+        step = phase if phase < _PULSE_STEPS else (_PULSE_STEPS * 2 - phase)
+        shade = _blend(self._dot_color, SURFACE, (step / _PULSE_STEPS) * 0.75)
+
+        if self._dot_item is not None:
+            try:
+                self._canvas.itemconfig(self._dot_item, fill=shade, outline=shade)
+            except Exception:  # pragma: no cover - la figura ya no existe
+                return
+        self._pulse_tick += 1
+        self._pulse_job = self.root.after(_PULSE_INTERVAL_MS, self._tick_pulse)
+
+    def _start_processing(self) -> None:
+        self._cancel_jobs()
+        self._anim_tick = 0
+        self._anim_started = time.monotonic()
+        self._tick_processing()
+
+    def _tick_processing(self) -> None:
+        if self.root is None:
+            return
+        base = STATES["processing"]["text"]
+        dots = "." * (self._anim_tick % 3 + 1)
+        elapsed = time.monotonic() - self._anim_started
+        suffix = f"   {int(elapsed)}s" if elapsed >= _PROCESSING_ELAPSED_AFTER_S else ""
+        self._set_state("processing", f"{base}{dots}{suffix}")
+        self._anim_tick += 1
+        self._anim_job = self.root.after(_PROCESSING_INTERVAL_MS, self._tick_processing)
+
+    def _show_transient(self, state_key: str, message: str | None, hide_ms: int) -> None:
+        self._cancel_jobs()
+        self._set_state(state_key, message)
+        if hide_ms > 0 and self.root is not None:
+            self._anim_job = self.root.after(hide_ms, lambda: self._set_state("hidden"))
+
+    # ------------------------------------------------------------------
     # API pública — thread-safe via root.after(0, fn)
     # ------------------------------------------------------------------
 
-    def show_ptt(self) -> None:
-        """Mostrar indicador PTT (rojo). Llamar desde cualquier thread."""
+    def _dispatch(self, fn) -> None:
         if self._enabled and self.root:
-            self.root.after(0, lambda: self._set_state("ptt"))
+            self.root.after(0, fn)
+
+    def _plain(self, state_key: str) -> None:
+        self._cancel_jobs()
+        self._set_state(state_key)
+
+    def show_ptt(self) -> None:
+        """Mostrar indicador PTT. Llamar desde cualquier thread."""
+        self._dispatch(lambda: self._plain("ptt"))
 
     def show_toggle(self) -> None:
-        """Mostrar indicador toggle (naranja). Llamar desde cualquier thread."""
-        if self._enabled and self.root:
-            self.root.after(0, lambda: self._set_state("toggle"))
+        """Mostrar indicador toggle. Llamar desde cualquier thread."""
+        self._dispatch(lambda: self._plain("toggle"))
+
+    def show_processing(self) -> None:
+        """Mostrar indicador animado de transcripción en curso.
+
+        Cubre la ventana entre soltar la tecla y ver el texto pegado, que sin
+        indicador se percibe como que la aplicación dejó de funcionar.
+        """
+        self._dispatch(self._start_processing)
 
     def show_loading(self) -> None:
         """Mostrar indicador de carga. Llamar desde cualquier thread."""
-        if self._enabled and self.root:
-            self.root.after(0, lambda: self._set_state("loading"))
+        self._dispatch(lambda: self._plain("loading"))
 
-    def show_error(self, message: str) -> None:
-        """Mostrar indicador de error (rojo oscuro). Llamar desde cualquier thread."""
-        if self._enabled and self.root:
-            self.root.after(0, lambda: self._set_state("error", message))
+    def show_cancelled(self) -> None:
+        """Confirmar que el dictado se descartó, y desaparecer."""
+        self._dispatch(
+            lambda: self._show_transient("cancelled", None, _CANCELLED_AUTO_HIDE_MS)
+        )
+
+    def show_error(self, message: str, auto_hide_ms: int = _ERROR_AUTO_HIDE_MS) -> None:
+        """Mostrar aviso de error. Llamar desde cualquier thread.
+
+        Se oculta solo: un error puntual no debe dejar un cartel permanente
+        sobre el escritorio. Pasar ``auto_hide_ms=0`` para que quede fijo.
+        """
+        self._dispatch(lambda: self._show_transient("error", message, auto_hide_ms))
 
     def hide(self) -> None:
         """Ocultar el overlay. Llamar desde cualquier thread."""
-        if self._enabled and self.root:
-            self.root.after(0, lambda: self._set_state("hidden"))
+        self._dispatch(lambda: self._plain("hidden"))
 
     def destroy(self) -> None:
         """Destruir la ventana tkinter al cerrar la app. Thread-safe."""
-        if self._enabled and self.root:
-            self.root.after(0, self.root.destroy)
+        self._dispatch(lambda: (self._cancel_jobs(), self.root.destroy()))

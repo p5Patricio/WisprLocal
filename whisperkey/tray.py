@@ -119,7 +119,10 @@ def start_tray(
                 except Exception:
                     pass
                 last_status = current
-            time.sleep(0.5)
+            # Esperar el evento en lugar de dormir: así el hilo termina apenas
+            # se pide el cierre, en vez de seguir girando hasta medio segundo.
+            if state.shutdown_event.wait(0.5):
+                return
 
     poller = threading.Thread(target=_poll_state, daemon=True, name="tray-poller")
     poller.start()
