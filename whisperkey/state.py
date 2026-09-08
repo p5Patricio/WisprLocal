@@ -12,10 +12,17 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-# Extra capture window after the hotkey is released. The PortAudio callback
-# still holds the last block(s) when the key comes up; without this margin the
-# final word of every dictation is truncated.
+# Ceiling for the extra capture window after the hotkey is released. The
+# PortAudio callback still holds the last block(s) when the key comes up;
+# without this margin the final word of every dictation is truncated.
+#
+# It is a ceiling, not a wait: capture ends as soon as the blocks covering the
+# key release have actually arrived, which is normally far sooner. Waiting the
+# full window unconditionally was pure added latency on every dictation.
 PTT_TAIL_GRACE_SECONDS = 0.2
+# Blocks to accept after the release: the one covering the release instant,
+# plus one for margin.
+PTT_TAIL_BLOCKS = 2
 
 
 @dataclass
@@ -32,6 +39,7 @@ class AppState:
     shutdown_event: threading.Event = field(default_factory=threading.Event)
     dropped_chunks: int = 0
     _capture_until: float = 0.0
+    _tail_blocks_left: int = 0
 
     def __post_init__(self) -> None:
         self.audio_queue = queue.Queue(maxsize=self.audio_queue_maxsize or 0)
@@ -74,7 +82,27 @@ class AppState:
         with self.lock:
             if self.ptt_active or self.toggle_active:
                 return True
+            if self._tail_blocks_left <= 0:
+                return False
             return time.monotonic() < self._capture_until
+
+    def should_capture(self) -> bool:
+        """Decide whether to queue this block, accounting for the PTT tail.
+
+        Called once per PortAudio callback, so it does its own bookkeeping under
+        a single lock: once the blocks covering the key release have arrived the
+        grace window closes immediately instead of running out the clock.
+        """
+        with self.lock:
+            if self.ptt_active or self.toggle_active:
+                return True
+            if self._tail_blocks_left <= 0:
+                return False
+            if time.monotonic() >= self._capture_until:
+                self._tail_blocks_left = 0
+                return False
+            self._tail_blocks_left -= 1
+            return True
 
     def begin_stop_grace(self, seconds: float = PTT_TAIL_GRACE_SECONDS) -> float:
         """Clear the recording flags but keep capturing for *seconds* more.
@@ -85,6 +113,7 @@ class AppState:
             self.ptt_active = False
             self.toggle_active = False
             self._capture_until = time.monotonic() + seconds
+            self._tail_blocks_left = PTT_TAIL_BLOCKS
         return seconds
 
     def stop_recording(self) -> None:
@@ -93,6 +122,7 @@ class AppState:
             self.ptt_active = False
             self.toggle_active = False
             self._capture_until = 0.0
+            self._tail_blocks_left = 0
 
     def note_dropped_chunk(self) -> int:
         """Record a discarded audio chunk and return the running total."""

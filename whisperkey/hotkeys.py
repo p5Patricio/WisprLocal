@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 
 from typing import Callable
 
@@ -21,16 +22,52 @@ if os.environ.get("XDG_SESSION_TYPE") == "wayland":
     )
 
 
-def _finish_recording(state: AppState) -> None:
-    """Stop capturing after a short grace window, then close the buffer.
+# Cadencia del sondeo que cierra el buffer en cuanto llega la cola del audio.
+_TAIL_POLL_INTERVAL_S = 0.005
+
+
+def _finish_recording(state: AppState, overlay=None) -> None:
+    """Close the recording once the audio tail has actually arrived.
 
     The last audio block is still in flight on the PortAudio thread when the key
-    comes up. Closing the buffer immediately truncates the final word.
+    comes up, and closing the buffer immediately truncates the final word. But
+    waiting out a fixed window costs that delay on every single dictation, so
+    the buffer closes as soon as those blocks land and only falls back to the
+    ceiling if they never do.
+
+    The overlay switches to "transcribing" rather than hiding: the gap between
+    releasing the key and seeing the text is otherwise indistinguishable from
+    the application having stopped working.
     """
+    if overlay is not None:
+        overlay.show_processing()
     grace = state.begin_stop_grace()
-    timer = threading.Timer(grace, state.put_sentinel)
-    timer.daemon = True
-    timer.start()
+    waiter = threading.Thread(
+        target=_close_when_tail_captured, args=(state, grace), daemon=True
+    )
+    waiter.start()
+
+
+def _close_when_tail_captured(state: AppState, max_wait: float) -> None:
+    deadline = time.monotonic() + max_wait
+    while time.monotonic() < deadline and state.is_capturing():
+        time.sleep(_TAIL_POLL_INTERVAL_S)
+    state.stop_recording()
+    state.put_sentinel()
+
+
+def _cancel_recording(state: AppState, overlay=None, sounds=None) -> None:
+    """Discard the dictation in progress without transcribing it.
+
+    Starting to speak and changing your mind had no exit: the only way out was
+    to finish the sentence and delete the text afterwards.
+    """
+    logger.info("Dictado cancelado por el usuario.")
+    state.reset_recording()
+    if overlay is not None:
+        overlay.show_cancelled()
+    if sounds is not None:
+        sounds.play_stop()
 
 _active_keys: set = set()
 _toggle_lock = False
@@ -79,12 +116,23 @@ def start_listener(
     load_model_key_str = config["hotkeys"].get("load_model_key", "").strip()
     load_model_key = resolve_key(load_model_key_str) if load_model_key_str else None
 
+    cancel_key_str = config["hotkeys"].get("cancel", "").strip()
+    cancel_key = resolve_key(cancel_key_str) if cancel_key_str else None
+
     logger.debug("PTT key: %s | Toggle key: %s | Load model key: %s", ptt_key, toggle_key, load_model_key)
 
     def on_press(key):
         global _toggle_lock
 
         if state.shutdown_event.is_set():
+            return
+
+        # — Cancelar el dictado en curso —
+        # Se evalúa antes que nada y sólo mientras se graba, para no interferir
+        # con el uso normal de la tecla en el resto del sistema.
+        if cancel_key is not None and key == cancel_key:
+            if state.is_recording():
+                _cancel_recording(state, overlay, sounds)
             return
 
         if state.get_model() is None:
@@ -110,9 +158,8 @@ def start_listener(
                 overlay.show_toggle()
                 logger.info("Toggle ON")
             else:
-                _finish_recording(state)
+                _finish_recording(state, overlay)
                 sounds.play_stop()
-                overlay.hide()
                 logger.info("Toggle OFF")
 
         # — Load/unload model key —
@@ -136,9 +183,8 @@ def start_listener(
 
         # — PTT: fin push-to-talk —
         if key == ptt_key and state.get_ptt():
-            _finish_recording(state)
+            _finish_recording(state, overlay)
             sounds.play_stop()
-            overlay.hide()
 
         # — Resetear toggle lock al soltar la tecla —
         if toggle_key is not None and key == toggle_key:

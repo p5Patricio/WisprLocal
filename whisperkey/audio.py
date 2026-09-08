@@ -64,7 +64,7 @@ def start_stream(state: AppState, config: dict, overlay=None) -> sd.InputStream:
 
         last_callback_time = current_time
 
-        if state.is_capturing():
+        if state.should_capture():
             try:
                 state.audio_queue.put_nowait(indata.copy())
             except queue.Full:

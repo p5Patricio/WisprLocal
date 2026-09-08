@@ -45,6 +45,18 @@ def play_ready() -> None:
     threading.Thread(target=_double, daemon=True).start()
 
 
+def play_done() -> None:
+    """1400Hz / 60ms — texto entregado.
+
+    Cierra el ciclo del dictado: sin esta señal la única confirmación de que
+    terminó es que el texto aparezca, que es justo lo que el usuario no está
+    mirando cuando dicta.
+    """
+    if not _enabled:
+        return
+    threading.Thread(target=_beep, args=(1400, 60), daemon=True).start()
+
+
 def play_error() -> None:
     """400Hz / 300ms — error."""
     if not _enabled:
