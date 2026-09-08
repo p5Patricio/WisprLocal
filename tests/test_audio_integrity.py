@@ -159,3 +159,135 @@ class TestSafeExtract:
 
         assert (dest / "whisper-server.exe").exists()
         assert (dest / "Release" / "whisper.dll").exists()
+
+
+class TestSubwordSegmentJoining:
+    """whisper.cpp opens segments at token boundaries, and Whisper's tokenizer
+    splits words into subword tokens, so a break lands mid-word regularly.
+
+    Every case below was taken verbatim from real dictations that came out
+    wrong: joining stripped segments with a space turned "dedicación" into
+    "dedic ación".
+    """
+
+    @pytest.mark.parametrize(
+        "raw, expected",
+        [
+            ("la dedic\nación necesaria", "la dedicación necesaria"),
+            ("los días pi\nensan", "los días piensan"),
+            ("encontrar mét\nodos alternativos", "encontrar métodos alternativos"),
+            ("distribuir y organiz\nar tu tiempo", "distribuir y organizar tu tiempo"),
+            ("necesitar\nás tomar decisiones", "necesitarás tomar decisiones"),
+            ("cualquier circun\nstancia", "cualquier circunstancia"),
+            ("hasta que alc\nance", "hasta que alcance"),
+            ("la gente no em\nprende", "la gente no emprende"),
+            ("comúnmente us\nado", "comúnmente usado"),
+            ("mucho que gan\nar", "mucho que ganar"),
+        ],
+    )
+    def test_subword_splits_are_rejoined(self, raw: str, expected: str) -> None:
+        assert transcription.clean_transcription(raw) == expected
+
+    def test_real_word_boundaries_keep_their_space(self) -> None:
+        """Segments that start a new word carry their own leading space."""
+        raw = "Necesito revisar las palabras\n exactas que aparecen en la\n documentación"
+        assert transcription.clean_transcription(raw) == (
+            "Necesito revisar las palabras exactas que aparecen en la documentación"
+        )
+
+    def test_discarded_segment_still_separates_its_neighbours(self) -> None:
+        """Dropping a non-speech marker must not glue the words around it."""
+        assert transcription.clean_transcription("Texto\n[MUSIC]\nmas texto") == "Texto mas texto"
+
+    def test_discarded_segment_does_not_double_an_existing_space(self) -> None:
+        assert transcription.clean_transcription("Texto\n(música)\n mas texto") == "Texto mas texto"
+
+    def test_mixed_boundaries_in_one_dictation(self) -> None:
+        raw = "Voy a organiz\nar el backend,\n después reviso los mét\nodos del deploy."
+        assert transcription.clean_transcription(raw) == (
+            "Voy a organizar el backend, después reviso los métodos del deploy."
+        )
+
+
+class TestLongDictationSegmentation:
+    """Un dictado largo era una sola espera al final. Ahora se corta en una
+    pausa y los tramos terminados se transcriben mientras el usuario habla."""
+
+    def _voz(self, n: int, nivel: float = 0.2) -> np.ndarray:
+        rng = np.random.default_rng(3)
+        return (rng.normal(0, nivel, (n, 1))).astype(np.float32)
+
+    def _silencio(self, n: int) -> np.ndarray:
+        return np.full((n, 1), 1e-4, dtype=np.float32)
+
+    def test_splits_on_the_quietest_block(self) -> None:
+        buffer = [self._voz(400) for _ in range(20)]
+        buffer[14] = self._silencio(400)
+        idx = transcription.find_pause_split(buffer, 16000)
+        assert idx == 14
+
+    def test_no_split_without_a_real_pause(self) -> None:
+        """Cortar a mitad de palabra devolvería la palabra partida en dos."""
+        buffer = [self._voz(400) for _ in range(20)]
+        assert transcription.find_pause_split(buffer, 16000) is None
+
+    def test_only_searches_the_recent_window(self) -> None:
+        """Un silencio viejo no sirve: cortaría ahí y dejaría todo pendiente."""
+        buffer = [self._voz(400) for _ in range(400)]
+        buffer[2] = self._silencio(400)  # silencio muy al principio
+        idx = transcription.find_pause_split(buffer, 16000, search_seconds=1.0)
+        assert idx is None
+
+    def test_split_is_never_at_zero(self) -> None:
+        buffer = [self._silencio(400) for _ in range(5)]
+        idx = transcription.find_pause_split(buffer, 16000)
+        assert idx is None or idx >= 1
+
+    def test_too_short_buffer_is_not_split(self) -> None:
+        assert transcription.find_pause_split([], 16000) is None
+        assert transcription.find_pause_split([self._silencio(400)], 16000) is None
+
+
+class TestDictationParts:
+    """Los tramos se entregan una sola vez, en orden, al terminar."""
+
+    def test_parts_are_joined_in_order(self) -> None:
+        parts = transcription._DictationParts()
+        parts.add("primera parte")
+        parts.add("segunda parte")
+        assert parts.drain("y el final") == "primera parte segunda parte y el final"
+
+    def test_drain_empties_the_buffer(self) -> None:
+        parts = transcription._DictationParts()
+        parts.add("algo")
+        parts.drain("")
+        assert parts.drain("") == ""
+
+    def test_empty_parts_are_ignored(self) -> None:
+        parts = transcription._DictationParts()
+        parts.add("")
+        parts.add("texto")
+        assert parts.drain("") == "texto"
+
+    def test_partial_segments_do_not_inject(self) -> None:
+        """Sólo el segmento final entrega el texto a la aplicación."""
+        from unittest.mock import MagicMock
+        from whisperkey.state import AppState
+
+        inject = MagicMock()
+        parts = transcription._DictationParts()
+        state = AppState()
+        state.set_model(MagicMock(transcribe=MagicMock(return_value="hola mundo")))
+
+        audio = [np.full((16000, 1), 0.2, dtype=np.float32)]
+        transcription._transcribe_buffer(
+            audio, state, inject, MagicMock(), 16000, 100, 1, "es", "",
+            None, parts, False,
+        )
+        inject.assert_not_called()
+
+        transcription._transcribe_buffer(
+            audio, state, inject, MagicMock(), 16000, 100, 1, "es", "",
+            None, parts, True,
+        )
+        inject.assert_called_once_with("hola mundo hola mundo")
