@@ -17,6 +17,7 @@ try:
 except ImportError:  # pragma: no cover
     ctk = None  # type: ignore[assignment]
 
+from whisperkey import theme
 from whisperkey.version import __version__ as VERSION
 
 log = logging.getLogger(__name__)
@@ -231,21 +232,21 @@ def show_update_dialog(
 
 
         if not download_installer(installer_url, installer_path):
-            progress_label.configure(text="Download failed!", text_color="red")
+            progress_label.configure(text="Download failed!", text_color=theme.DANGER)
             return
 
         if expected_hash:
             progress_label.configure(text="Verifying...")
             dialog.update_idletasks()
             if not verify_sha256(installer_path, expected_hash):
-                progress_label.configure(text="Verification failed!", text_color="red")
+                progress_label.configure(text="Verification failed!", text_color=theme.DANGER)
                 return
 
         progress_label.configure(text="Launching installer...")
         dialog.update_idletasks()
 
         if not launch_silent_install(installer_path):
-            progress_label.configure(text="Installation failed!", text_color="red")
+            progress_label.configure(text="Installation failed!", text_color=theme.DANGER)
 
     def _download_manual() -> None:
         webbrowser.open(url)
@@ -257,5 +258,9 @@ def show_update_dialog(
         text="Download manually",
         command=_download_manual,
         width=200,
-        fg_color="gray40",
+        fg_color="transparent",
+        hover_color=theme.BG_HOVER,
+        text_color=theme.TEXT_MUTED,
+        border_width=1,
+        border_color=theme.BORDER,
     ).pack(pady=2)

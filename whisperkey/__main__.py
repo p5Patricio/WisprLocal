@@ -10,6 +10,7 @@ from logging.handlers import RotatingFileHandler
 
 from whisperkey import config as config_module
 from whisperkey import sounds
+from whisperkey import theme
 from whisperkey.audio import start_stream, stop_stream
 from whisperkey.hotkeys import start_listener
 from whisperkey.injection import inject_text
@@ -71,6 +72,10 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Single Tk instance rule — root siempre oculto
     # ------------------------------------------------------------------
+    # El tema se instala antes de crear la raíz: customtkinter lee la paleta
+    # al construir cada widget, no después.
+    theme.apply()
+
     if _CTK_AVAILABLE:
         root = ctk.CTk()
     else:

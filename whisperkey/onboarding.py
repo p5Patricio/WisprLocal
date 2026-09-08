@@ -18,6 +18,7 @@ import numpy as np
 import sounddevice as sd
 from pynput import keyboard as kb
 
+from whisperkey import theme
 from whisperkey import config as config_module
 from whisperkey.platform import get_platform
 from whisperkey.sounds import play_ready
@@ -64,24 +65,40 @@ class OnboardingWizard:
         self._header = ctk.CTkLabel(
             self._window,
             text="",
-            font=ctk.CTkFont(size=18, weight="bold"),
+            font=theme.font(theme.SIZE_TITLE, "bold"),
         )
-        self._header.pack(pady=(15, 5))
+        self._header.pack(pady=(theme.SPACE_LG, theme.SPACE_XS))
 
-        self._step_label = ctk.CTkLabel(self._window, text="", font=ctk.CTkFont(size=12))
-        self._step_label.pack(pady=(0, 10))
+        self._step_label = ctk.CTkLabel(
+            self._window, text="",
+            font=theme.font(theme.SIZE_SMALL), text_color=theme.TEXT_MUTED,
+        )
+        self._step_label.pack(pady=(0, theme.SPACE_SM))
+
+        # Avance del asistente: la barra dice de un vistazo cuánto falta, cosa
+        # que un "Paso 1 de 6" en texto no comunica igual.
+        self._progress = ctk.CTkProgressBar(self._window, height=3)
+        self._progress.pack(fill="x", padx=theme.SPACE_XL, pady=(0, theme.SPACE_MD))
 
         self._content = ctk.CTkFrame(self._window, fg_color="transparent")
-        self._content.pack(padx=20, pady=5, fill="both", expand=True)
+        self._content.pack(padx=theme.SPACE_LG, pady=theme.SPACE_XS, fill="both", expand=True)
 
         self._nav = ctk.CTkFrame(self._window, fg_color="transparent")
-        self._nav.pack(pady=15)
+        self._nav.pack(pady=theme.SPACE_LG, padx=theme.SPACE_LG, fill="x")
 
-        self._btn_prev = ctk.CTkButton(self._nav, text="Anterior", command=self._prev_step, width=100)
-        self._btn_prev.pack(side="left", padx=10)
+        # Secundario sin relleno: deshabilitado, un botón pintado del color de
+        # acción sigue leyéndose como clickeable.
+        self._btn_prev = ctk.CTkButton(
+            self._nav, text="Anterior", command=self._prev_step, width=110, height=38,
+            fg_color="transparent", hover_color=theme.BG_HOVER,
+            text_color=theme.TEXT_MUTED, border_width=1, border_color=theme.BORDER,
+        )
+        self._btn_prev.pack(side="left")
 
-        self._btn_next = ctk.CTkButton(self._nav, text="Siguiente", command=self._next_step, width=100)
-        self._btn_next.pack(side="left", padx=10)
+        self._btn_next = ctk.CTkButton(
+            self._nav, text="Siguiente", command=self._next_step, width=170, height=38,
+        )
+        self._btn_next.pack(side="right")
 
         self._show_step(0)
 
@@ -95,6 +112,7 @@ class OnboardingWizard:
         self._current_step = idx
         self._header.configure(text=_STEP_TITLES[idx])
         self._step_label.configure(text=f"Paso {idx + 1} de {len(_STEP_TITLES)}")
+        self._progress.set((idx + 1) / len(_STEP_TITLES))
 
         for w in self._content.winfo_children():
             w.destroy()
@@ -112,7 +130,12 @@ class OnboardingWizard:
         elif idx == 5:
             self._build_step_tutorial()
 
-        self._btn_prev.configure(state="disabled" if idx == 0 else "normal")
+        # En el primer paso el botón desaparece en vez de quedar deshabilitado:
+        # un control apagado sigue pidiendo atención sin poder darle nada.
+        if idx == 0:
+            self._btn_prev.pack_forget()
+        else:
+            self._btn_prev.pack(side="left")
         if idx == len(_STEP_TITLES) - 1:
             self._btn_next.configure(text="Empezar a usar WhisperKey")
         else:
@@ -230,7 +253,7 @@ class OnboardingWizard:
             self._content,
             text=f"Modelo recomendado: {recommended}",
             font=ctk.CTkFont(size=13, weight="bold"),
-            text_color="#2B6CB0",
+            text_color=theme.ACCENT_SOFT,
         ).pack(pady=15)
 
     # ------------------------------------------------------------------
@@ -343,7 +366,7 @@ class OnboardingWizard:
             self._content,
             text=f"Tecla actual: {self._captured_ptt_key.upper()}",
             font=ctk.CTkFont(size=16, weight="bold"),
-            text_color="#2B6CB0",
+            text_color=theme.ACCENT_SOFT,
         )
         self._hotkey_label.pack(pady=15)
 
