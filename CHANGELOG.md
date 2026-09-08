@@ -1,5 +1,87 @@
 # Changelog
 
+## v1.4.0 — Dictation experience and design system
+
+### Fixed — words broken apart
+
+- **Dictations no longer come back with spaces inside words** ("dedic ación",
+  "organiz ar", "circun stancia"). whisper.cpp opens a segment at token
+  boundaries and Whisper's tokenizer splits words into subword tokens, so a
+  break lands mid-word regularly. Segments carry their own leading space when
+  they start a new word and none when they continue one; stripping each segment
+  and re-joining them with a space turned every one of those breaks into a
+  literal space.
+
+### Added — dictation feedback and control
+
+- **The overlay stays on screen while transcribing.** Releasing the key used to
+  hide it immediately, leaving no sign the application was still working until
+  the text appeared. It now shows an animated indicator, and past three seconds
+  it reports elapsed time so a long wait reads as progress.
+- **Esc discards the dictation in progress** (`hotkeys.cancel`, configurable).
+  Starting to speak and changing your mind had no exit other than finishing the
+  sentence and deleting the text afterwards. The key is inert outside a
+  recording, so it keeps working normally everywhere else.
+- **Long dictations are transcribed while you are still speaking.** Once a
+  recording passes 25 seconds it is cut at a natural pause and the finished part
+  is transcribed in the background, so only the last segment is pending on
+  release. A 34-second dictation now waits about one second instead of the whole
+  recording. Cuts land on silence, never inside a word.
+- **A short tone confirms the text was delivered.**
+- Errors clear themselves after a few seconds instead of leaving a permanent
+  badge on the desktop.
+
+### Changed — perceived latency cut in half
+
+Profiling a four-second dictation showed two thirds of the wait was fixed
+`sleep` calls rather than the model, which already runs at 20-24x realtime.
+
+- **The clipboard is confirmed, not waited on.** A blind 150 ms wait became a
+  poll that returns as soon as the clipboard actually holds the text — a
+  measured 3 ms typically, while still waiting when the system is genuinely
+  slow.
+- **The push-to-talk tail window became a ceiling instead of a delay.** Capture
+  now ends as soon as the audio blocks covering the key release arrive (~62 ms
+  at a 31 ms block period) rather than always running out 200 ms.
+
+Together: roughly 545 ms down to 260 ms, without touching decoding quality.
+Dynamic `audio_ctx` and greedy decoding were both measured and rejected — the
+first degraded accuracy on GPU for no speed gain, the second traded accuracy for
+13% of a wait that is no longer dominated by inference.
+
+### Changed — visual design
+
+- **A single design system** (`whisperkey/theme.py`): one blue-on-black palette,
+  one type scale, one spacing scale, installed as the customtkinter theme so
+  every window inherits it. Colors were previously chosen per widget, which is
+  why the application looked assembled rather than designed.
+- **The recording indicator is a dark rounded pill** with a breathing status
+  dot, replacing the orange and red blocks.
+- **All six settings tabs share one rhythm**: section headings, muted helper
+  text, and a label-and-control row. Tab contents scroll, so no setting is cut
+  off. The cancel key is exposed in the interface.
+- **The setup wizard shows a progress bar**, and its back button no longer
+  renders as a filled action button while disabled.
+
+### Fixed — reliability
+
+- **The settings window opens again.** `settings_gui.py` had carried a syntax
+  error since 2026-08-15 and shipped broken in v1.2.0 and v1.3.0. No test
+  imported the module, so the suite stayed green while the window was
+  unopenable.
+- The tray poller waits on the shutdown event instead of sleeping, so it exits
+  immediately instead of lingering.
+- The overlay logs a warning when its startup handshake expires instead of
+  silently leaving the indicator half-built.
+- Test runs no longer write practice dictations into the real history file.
+
+### Tests
+
+273 -> 363, and stable across repeated runs. New coverage parses and imports
+every module and builds the settings and onboarding windows for real — an import
+alone would not have caught either the syntax error or a layout manager
+conflict.
+
 ## v1.3.0 — Transcription accuracy and stability
 
 This release fixes the accuracy regression introduced by the whisper.cpp
