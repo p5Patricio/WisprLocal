@@ -278,5 +278,18 @@ class TestEndToEndDictation:
         audio.stop_stream(stream)
 
         assert e2e_mocks["injected_texts"]
-        entries = get_entries()
-        assert any("integrated test result" in entry.get("text", "") for entry in entries)
+
+        # El historial se escribe DESPUÉS de pegar, así que esperar a la
+        # inyección no alcanza. Antes este test pasaba por leer entradas que
+        # habían quedado de corridas anteriores en el historial real.
+        def historial_tiene_el_texto() -> bool:
+            return any(
+                "integrated test result" in entry.get("text", "")
+                for entry in get_entries()
+            )
+
+        limite = time.monotonic() + 5.0
+        while time.monotonic() < limite and not historial_tiene_el_texto():
+            time.sleep(0.02)
+
+        assert historial_tiene_el_texto()

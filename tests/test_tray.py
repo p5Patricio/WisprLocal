@@ -45,7 +45,15 @@ def mock_pystray(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("pystray.Icon", FakeIcon)
     monkeypatch.setattr("pystray.Menu", FakeMenu)
     monkeypatch.setattr("pystray.MenuItem", lambda text, action, **kwargs: (text, action))
-    return icons, menus
+    yield icons, menus
+
+    # FakeIcon.run() gira hasta que se lo detenga. Un ícono que queda vivo se
+    # lleva GIL para siempre y hace fallar tests de otros módulos por inanición.
+    for icono in icons:
+        icono.stop()
+    for hilo in _hilos_de_bandeja:
+        hilo.join(timeout=2)
+    _hilos_de_bandeja.clear()
 
 
 @pytest.fixture
@@ -57,6 +65,9 @@ def mock_image(monkeypatch: pytest.MonkeyPatch):
     )
 
 
+_hilos_de_bandeja: list[threading.Thread] = []
+
+
 def _run_tray_in_thread(state: AppState, config: dict, on_load: Any, on_unload: Any, on_quit: Any) -> threading.Thread:
     """Helper to run the blocking tray function in a daemon thread."""
     t = threading.Thread(
@@ -65,6 +76,7 @@ def _run_tray_in_thread(state: AppState, config: dict, on_load: Any, on_unload: 
         daemon=True,
     )
     t.start()
+    _hilos_de_bandeja.append(t)
     time.sleep(0.05)
     return t
 
