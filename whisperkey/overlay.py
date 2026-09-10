@@ -22,6 +22,8 @@ import sys
 import time
 import tkinter as tk
 
+from whisperkey import pill
+
 log = logging.getLogger(__name__)
 
 # — Paleta: azul sobre negro —
@@ -113,6 +115,14 @@ class RecordingOverlay:
         self._anim_started = 0.0
         self._dot_color = SURFACE
         self._dot_item: int | None = None
+        # Camino preferido: imagen suavizada con alfa por píxel. El Canvas de
+        # tkinter dibuja sin antialiasing y las esquinas salen en escalones.
+        self._layered = pill.supports_per_pixel_alpha()
+        self._scale = 1.0
+        # Qué se está mostrando: el pulso redibuja la píldora entera en el
+        # camino suavizado, así que necesita saber qué texto y estado repintar.
+        self._pulse_state = "hidden"
+        self._pulse_text = ""
 
         if self._enabled:
             t = threading.Thread(target=self._run, daemon=True, name="overlay")
@@ -135,10 +145,24 @@ class RecordingOverlay:
         self.root = tk.Tk()
         self.root.overrideredirect(True)           # sin bordes ni decoraciones
         self.root.wm_attributes("-topmost", True)  # siempre encima
-        self.root.wm_attributes("-alpha", self._opacity)
+        if not self._layered:
+            # -alpha de tkinter llama por dentro a SetLayeredWindowAttributes,
+            # que es EXCLUYENTE con UpdateLayeredWindow: usar una inhabilita la
+            # otra. En modo suavizado la opacidad va en el canal alfa.
+            self.root.wm_attributes("-alpha", self._opacity)
+
+        try:
+            self._scale = pill.device_scale(self.root.winfo_screenwidth())
+        except Exception:  # pragma: no cover - depende del sistema
+            self._scale = 1.0
 
         canvas_bg = SURFACE
-        if sys.platform == "win32":
+        if self._layered:
+            # El color clave y el alfa por píxel también son excluyentes: con
+            # color clave el borde suavizado se mezclaría contra el color de
+            # transparencia y dejaría una aureola alrededor de la píldora.
+            pass
+        elif sys.platform == "win32":
             try:
                 self.root.wm_attributes("-transparentcolor", _TRANSPARENT_KEY)
                 canvas_bg = _TRANSPARENT_KEY
@@ -181,7 +205,11 @@ class RecordingOverlay:
 
     def _render(self, text: str, fg: str, dot: str) -> None:
         """Redibuja la píldora completa. SOLO desde el thread de tkinter."""
-        if self.root is None or self._canvas is None or self._label is None:
+        if self.root is None:
+            return
+        if self._layered and self._render_layered(text, fg, dot):
+            return
+        if self._canvas is None or self._label is None:
             return
 
         self._label.config(text=text, fg=fg, bg=SURFACE)
@@ -212,6 +240,74 @@ class RecordingOverlay:
         self._position_window(w, h)
         self.root.deiconify()
 
+    def _render_layered(self, text: str, fg: str, dot: str) -> bool:
+        """Dibuja la píldora suavizada y la sube como contenido de la ventana.
+
+        Devuelve False si el camino no está disponible, para caer al Canvas.
+        """
+        assert self.root is not None
+        try:
+            imagen = pill.render_pill(
+                text, fg, dot, SURFACE, BORDER,
+                font_size=self._font_size,
+                scale=self._scale,
+                pad_x=_PAD_X, pad_y=_PAD_Y,
+                dot_radius=_DOT_RADIUS, dot_gap=_DOT_GAP,
+            )
+            if self._opacity < 1.0:
+                canal = imagen.getchannel("A").point(
+                    lambda v: int(v * self._opacity)
+                )
+                imagen.putalpha(canal)
+
+            # UpdateLayeredWindow trabaja en píxeles físicos y fija tamaño y
+            # posición por su cuenta; tkinter razona en lógicos.
+            x, y = self._physical_position(imagen.width, imagen.height)
+            logico_w = max(1, int(imagen.width / self._scale))
+            logico_h = max(1, int(imagen.height / self._scale))
+            self.root.geometry(f"{logico_w}x{logico_h}")
+            self.root.deiconify()
+            self.root.update_idletasks()
+
+            hwnd = pill.top_level_hwnd(self.root.winfo_id())
+            if not pill.push_layered(hwnd, imagen, x, y):
+                self._layered = False
+                return False
+            return True
+        except Exception as exc:  # pragma: no cover - depende de la plataforma
+            log.warning("Sin dibujo suavizado del overlay (%s); usando Canvas.", exc)
+            self._layered = False
+            return False
+
+    def _physical_position(self, w: int, h: int) -> tuple[int, int]:
+        """Esquina donde va la píldora, en píxeles físicos."""
+        sw, sh = pill.screen_size_physical()
+        if sw <= 0 or sh <= 0:  # pragma: no cover - fuera de Windows
+            return self._screen_position(w, h)
+        margen = int(round(20 * self._scale))
+        barra = int(round(48 * self._scale))
+        posiciones = {
+            "bottom-right": (sw - w - margen, sh - h - margen - barra),
+            "bottom-left":  (margen,           sh - h - margen - barra),
+            "top-right":    (sw - w - margen,  margen),
+            "top-left":      (margen,          margen),
+        }
+        return posiciones.get(self._position, posiciones["bottom-right"])
+
+    def _screen_position(self, w: int, h: int) -> tuple[int, int]:
+        """Esquina donde va la píldora, en coordenadas lógicas de tkinter."""
+        assert self.root is not None
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        margen = 20
+        posiciones = {
+            "bottom-right": (sw - w - margen, sh - h - margen - 48),
+            "bottom-left":  (margen,           sh - h - margen - 48),
+            "top-right":    (sw - w - margen,  margen),
+            "top-left":     (margen,           margen),
+        }
+        return posiciones.get(self._position, posiciones["bottom-right"])
+
     def _set_state(self, state_key: str, text: str | None = None) -> None:
         """Actualiza el estado visual. SOLO llamar desde el thread de tkinter."""
         if not self._enabled or self.root is None:
@@ -221,26 +317,16 @@ class RecordingOverlay:
             self.root.withdraw()
             return
         self._dot_color = state["dot"]
-        self._render(
-            text if text is not None else state["text"], state["fg"], state["dot"]
-        )
+        self._pulse_state = state_key
+        self._pulse_text = text if text is not None else state["text"]
+        self._render(self._pulse_text, state["fg"], state["dot"])
         if state.get("pulse"):
             self._start_pulse()
 
     def _position_window(self, w: int, h: int) -> None:
         """Calcula y aplica la posición según la configuración."""
         assert self.root is not None
-        sw = self.root.winfo_screenwidth()
-        sh = self.root.winfo_screenheight()
-        margin = 20
-
-        positions = {
-            "bottom-right": (sw - w - margin, sh - h - margin - 48),
-            "bottom-left":  (margin,           sh - h - margin - 48),
-            "top-right":    (sw - w - margin,  margin),
-            "top-left":     (margin,           margin),
-        }
-        x, y = positions.get(self._position, positions["bottom-right"])
+        x, y = self._screen_position(w, h)
         self.root.geometry(f"+{x}+{y}")
 
     # ------------------------------------------------------------------
@@ -269,7 +355,10 @@ class RecordingOverlay:
         step = phase if phase < _PULSE_STEPS else (_PULSE_STEPS * 2 - phase)
         shade = _blend(self._dot_color, SURFACE, (step / _PULSE_STEPS) * 0.75)
 
-        if self._dot_item is not None:
+        if self._layered:
+            estado = STATES.get(self._pulse_state) or {}
+            self._render(self._pulse_text, estado.get("fg", TEXT), shade)
+        elif self._dot_item is not None:
             try:
                 self._canvas.itemconfig(self._dot_item, fill=shade, outline=shade)
             except Exception:  # pragma: no cover - la figura ya no existe
