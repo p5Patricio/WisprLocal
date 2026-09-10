@@ -86,9 +86,13 @@ def build_theme() -> dict:
     return {
         "CTk": {"fg_color": _pair(BG_BASE)},
         "CTkToplevel": {"fg_color": _pair(BG_BASE)},
+        # El borde es opt-in: la mayoría de los frames existen sólo para
+        # maquetar y son transparentes. Con un borde por defecto cada uno de
+        # ellos dibujaba una esquina redondeada suelta, y la ventana se llenaba
+        # de líneas que empezaban y terminaban en cualquier lado.
         "CTkFrame": {
             "corner_radius": RADIUS,
-            "border_width": 1,
+            "border_width": 0,
             "fg_color": _pair(BG_SURFACE),
             "top_fg_color": _pair(BG_ELEVATED),
             "border_color": _pair(BORDER),
@@ -173,13 +177,15 @@ def build_theme() -> dict:
             "text_color": _pair(TEXT),
             "text_color_disabled": _pair(TEXT_FAINT),
         },
+        # El botón del desplegable se funde con el campo: como bloque de otro
+        # color quedaba pegado al costado, con un canto duro que no pertenece.
         "CTkComboBox": {
             "corner_radius": RADIUS_SM,
             "border_width": 1,
             "fg_color": _pair(BG_ELEVATED),
             "border_color": _pair(BORDER),
-            "button_color": _pair(BORDER),
-            "button_hover_color": _pair(ACCENT),
+            "button_color": _pair(BG_ELEVATED),
+            "button_hover_color": _pair(BG_HOVER),
             "text_color": _pair(TEXT),
             "text_color_disabled": _pair(TEXT_FAINT),
         },

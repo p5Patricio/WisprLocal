@@ -239,12 +239,39 @@ class SettingsGUI:
         """Contenedor desplazable para el contenido de una pestaña.
 
         El alto de una pestaña es fijo y el contenido no: sin esto, el último
-        ajuste de Audio y de Hotkeys quedaba cortado fuera de la vista.
+        ajuste de Audio y de Hotkeys quedaba cortado fuera de la vista. La barra
+        sólo aparece cuando hace falta: dejarla fija dibujaba una línea vertical
+        permanente incluso en pestañas que entran enteras.
         """
         assert ctk is not None
         cuerpo = ctk.CTkScrollableFrame(tab, fg_color="transparent")
         cuerpo.pack(fill="both", expand=True)
+        self._autohide_scrollbar(cuerpo)
         return cuerpo
+
+    def _autohide_scrollbar(self, cuerpo) -> None:
+        """Muestra la barra de desplazamiento sólo si el contenido no entra."""
+        barra = getattr(cuerpo, "_scrollbar", None)
+        lienzo = getattr(cuerpo, "_parent_canvas", None)
+        if barra is None or lienzo is None:  # pragma: no cover - otra versión de CTk
+            return
+
+        def revisar(_=None) -> None:
+            try:
+                region = lienzo.bbox("all")
+                if region is None:
+                    return
+                necesita = (region[3] - region[1]) > lienzo.winfo_height() + 2
+                if necesita:
+                    barra.grid()
+                else:
+                    barra.grid_remove()
+            except Exception:  # pragma: no cover - widget ya destruido
+                pass
+
+        cuerpo.bind("<Configure>", revisar, add="+")
+        lienzo.bind("<Configure>", revisar, add="+")
+        cuerpo.after(120, revisar)
 
     def _field(self, parent, label: str, hint: str = ""):
         """Fila de ajuste: etiqueta y pista a la izquierda, control a la derecha.
@@ -274,7 +301,10 @@ class SettingsGUI:
     def _status_card(self, parent):
         """Tarjeta de estado: un punto de color y dos líneas de texto."""
         assert ctk is not None
-        card = ctk.CTkFrame(parent, fg_color=theme.BG_ELEVATED, border_color=theme.BORDER)
+        card = ctk.CTkFrame(
+            parent, fg_color=theme.BG_ELEVATED,
+            border_width=1, border_color=theme.BORDER,
+        )
         card.pack(fill="x", padx=theme.SPACE_LG, pady=theme.SPACE_MD)
         inner = ctk.CTkFrame(card, fg_color="transparent")
         inner.pack(fill="x", padx=theme.SPACE_MD, pady=theme.SPACE_MD)
@@ -560,7 +590,10 @@ class SettingsGUI:
             text_color=theme.TEXT_MUTED, border_width=1, border_color=theme.BORDER,
         ).place(relx=1.0, rely=0.0, anchor="ne")
 
-        lista = ctk.CTkScrollableFrame(tab, fg_color=theme.BG_ELEVATED, border_color=theme.BORDER)
+        lista = ctk.CTkScrollableFrame(
+            tab, fg_color=theme.BG_ELEVATED,
+            border_width=1, border_color=theme.BORDER,
+        )
         lista.pack(padx=theme.SPACE_LG, pady=(0, theme.SPACE_LG), fill="both", expand=True)
 
         if not entries:
@@ -576,17 +609,19 @@ class SettingsGUI:
             fila = ctk.CTkFrame(lista, fg_color="transparent")
             fila.pack(fill="x", pady=(0, theme.SPACE_XS))
 
+            # anchor="n": la fecha se alinea con la PRIMERA línea del dictado.
+            # Centrada, quedaba flotando a media altura de los textos largos.
             ctk.CTkLabel(
-                fila, text=ts, width=110, anchor="w",
+                fila, text=ts, width=110, anchor="nw",
                 font=theme.font(theme.SIZE_SMALL), text_color=theme.TEXT_FAINT,
-            ).pack(side="left")
+            ).pack(side="left", anchor="n")
             ctk.CTkButton(
                 fila, text="Copiar", width=64, height=26,
                 command=lambda x=texto: self._copy_to_clipboard(x),
                 fg_color="transparent", hover_color=theme.BG_HOVER,
                 text_color=theme.TEXT_MUTED, border_width=1, border_color=theme.BORDER,
                 font=theme.font(theme.SIZE_SMALL),
-            ).pack(side="right", padx=(theme.SPACE_SM, 0))
+            ).pack(side="right", anchor="n", padx=(theme.SPACE_SM, 0))
             ctk.CTkLabel(
                 fila, text=texto, anchor="w", justify="left", wraplength=340,
                 font=theme.font(theme.SIZE_SMALL), text_color=theme.TEXT,
@@ -634,7 +669,10 @@ class SettingsGUI:
 
         self._section(tab, "Acerca de")
 
-        tarjeta = ctk.CTkFrame(tab, fg_color=theme.BG_ELEVATED, border_color=theme.BORDER)
+        tarjeta = ctk.CTkFrame(
+            tab, fg_color=theme.BG_ELEVATED,
+            border_width=1, border_color=theme.BORDER,
+        )
         tarjeta.pack(fill="x", padx=theme.SPACE_LG, pady=(0, theme.SPACE_LG))
         interior = ctk.CTkFrame(tarjeta, fg_color="transparent")
         interior.pack(fill="x", padx=theme.SPACE_MD, pady=theme.SPACE_MD)

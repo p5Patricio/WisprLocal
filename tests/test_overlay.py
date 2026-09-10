@@ -218,6 +218,10 @@ def mock_tk(monkeypatch: pytest.MonkeyPatch):
         def start(self):
             self._target(*self._args, **self._kwargs)
 
+    # Estos tests cubren el camino de respaldo (Canvas), que es el que corre
+    # donde no hay alfa por píxel. El camino suavizado tiene su propia clase.
+    monkeypatch.setattr(overlay.pill, "supports_per_pixel_alpha", lambda: False)
+
     import tkinter as tk
     monkeypatch.setattr(overlay.threading, "Thread", ThreadInmediato)
     monkeypatch.setattr(tk, "Tk", make_root)
@@ -429,3 +433,59 @@ class TestBlend:
     def test_blend_midpoint_is_between(self) -> None:
         mid = overlay._blend("#ffffff", "#000000", 0.5)
         assert mid.lower() in ("#808080", "#7f7f7f")
+
+
+class TestPildoraSuavizada:
+    """El Canvas de tkinter dibuja sin antialiasing: sus esquinas redondeadas y
+    el punto de estado salían en escalones. El camino suavizado dibuja con
+    Pillow a 4x y lo sube con alfa por píxel."""
+
+    def test_render_pill_devuelve_imagen_con_transparencia(self) -> None:
+        from whisperkey import pill
+
+        img = pill.render_pill(
+            "Escuchando", overlay.TEXT, overlay.STATES["ptt"]["dot"],
+            overlay.SURFACE, overlay.BORDER, font_size=14,
+        )
+        assert img.mode == "RGBA"
+        assert img.width > img.height
+        # Las esquinas quedan transparentes; el centro, opaco.
+        assert img.getpixel((0, 0))[3] == 0
+        assert img.getpixel((img.width // 2, img.height // 2))[3] == 255
+
+    def test_los_bordes_quedan_suavizados(self) -> None:
+        """Un borde suavizado tiene alfa intermedio; uno en escalones, no."""
+        from whisperkey import pill
+
+        img = pill.render_pill(
+            "Escuchando", overlay.TEXT, overlay.STATES["ptt"]["dot"],
+            overlay.SURFACE, overlay.BORDER, font_size=14,
+        )
+        alfas = set(img.getchannel("A").tobytes())
+        intermedios = [a for a in alfas if 10 < a < 245]
+        assert len(intermedios) > 5, "sin alfa intermedio no hay antialiasing"
+
+    def test_el_texto_cambia_el_ancho(self) -> None:
+        from whisperkey import pill
+
+        corto = pill.render_pill("Error", overlay.TEXT, "#F87171", overlay.SURFACE, overlay.BORDER)
+        largo = pill.render_pill("Transcribiendo...", overlay.TEXT, "#38BDF8", overlay.SURFACE, overlay.BORDER)
+        assert largo.width > corto.width
+
+    def test_sin_alfa_por_pixel_cae_al_canvas(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from whisperkey import pill
+
+        monkeypatch.setattr(pill, "supports_per_pixel_alpha", lambda: False)
+        assert pill.push_layered(0, pill.render_pill("x", "#fff", "#fff", "#000", "#111"), 0, 0) is False
+
+    def test_premultiplicado_respeta_el_alfa(self) -> None:
+        from PIL import Image
+        from whisperkey import pill
+
+        img = Image.new("RGBA", (2, 1))
+        img.putpixel((0, 0), (255, 0, 0, 255))   # rojo opaco
+        img.putpixel((1, 0), (255, 0, 0, 0))     # rojo totalmente transparente
+        crudo = pill._premultiply(img)
+        # BGRA: el opaco conserva el canal rojo, el transparente lo pierde.
+        assert crudo[2] == 255 and crudo[3] == 255
+        assert crudo[6] == 0 and crudo[7] == 0

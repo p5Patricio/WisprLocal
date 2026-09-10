@@ -62,6 +62,14 @@ class OnboardingWizard:
             self._window.transient(master)
         self._window.protocol("WM_DELETE_WINDOW", self._on_close)
 
+        # El avance va arriba del todo y a lo ancho: puesto bajo el texto se
+        # leía como un subrayado suelto en vez de como progreso.
+        self._progress = ctk.CTkProgressBar(
+            self._window, height=3, corner_radius=0,
+            fg_color=theme.BG_SURFACE, progress_color=theme.ACCENT,
+        )
+        self._progress.pack(fill="x", side="top")
+
         self._header = ctk.CTkLabel(
             self._window,
             text="",
@@ -73,18 +81,20 @@ class OnboardingWizard:
             self._window, text="",
             font=theme.font(theme.SIZE_SMALL), text_color=theme.TEXT_MUTED,
         )
-        self._step_label.pack(pady=(0, theme.SPACE_SM))
+        self._step_label.pack(pady=(0, theme.SPACE_MD))
 
-        # Avance del asistente: la barra dice de un vistazo cuánto falta, cosa
-        # que un "Paso 1 de 6" en texto no comunica igual.
-        self._progress = ctk.CTkProgressBar(self._window, height=3)
-        self._progress.pack(fill="x", padx=theme.SPACE_XL, pady=(0, theme.SPACE_MD))
-
-        self._content = ctk.CTkFrame(self._window, fg_color="transparent")
-        self._content.pack(padx=theme.SPACE_LG, pady=theme.SPACE_XS, fill="both", expand=True)
-
+        # Pie fijo abajo: los botones estaban contra el borde de la ventana.
         self._nav = ctk.CTkFrame(self._window, fg_color="transparent")
-        self._nav.pack(pady=theme.SPACE_LG, padx=theme.SPACE_LG, fill="x")
+        self._nav.pack(side="bottom", fill="x",
+                       padx=theme.SPACE_LG, pady=(theme.SPACE_MD, theme.SPACE_LG))
+
+        # El contenido vive en un panel, como en la ventana de configuración;
+        # suelto sobre el fondo se veía sin terminar.
+        self._content = ctk.CTkFrame(
+            self._window, fg_color=theme.BG_SURFACE,
+            border_width=1, border_color=theme.BORDER,
+        )
+        self._content.pack(padx=theme.SPACE_LG, pady=(0, 0), fill="both", expand=True)
 
         # Secundario sin relleno: deshabilitado, un botón pintado del color de
         # acción sigue leyéndose como clickeable.
