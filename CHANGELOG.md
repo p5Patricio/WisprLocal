@@ -1,5 +1,43 @@
 # Changelog
 
+## v1.4.1 — Visual finish
+
+### Fixed — the recording indicator was jagged
+
+- **The floating indicator is drawn with real antialiasing.** Tkinter's canvas
+  has none, so its rounded corners came out as hard stair-steps and the status
+  dot as a pixelated blob. The pill is now drawn with Pillow at 4x and
+  downsampled, then shown through a Windows layered window with **per-pixel
+  alpha** so the smoothed edge blends against the desktop rather than against a
+  transparency key colour. No new dependency: Pillow was already required.
+- The non-Windows drawing path is unchanged and still used as a fallback.
+
+### Fixed — windows looked unfinished
+
+- **Stray line fragments are gone.** The design system set a border as the
+  *default* for every frame, but nearly all frames are transparent and exist
+  only for layout, so each one drew its own rounded corner. The result was
+  pieces of line that started and ended nowhere, most visible beside the status
+  dot. Borders are opt-in now: only real cards ask for one.
+- **Scrollbars appear only when the content overflows.** A permanently visible
+  scrollbar drew a vertical line down tabs that fit on screen.
+- **The dropdown button blends into its field** instead of sitting beside it as
+  a differently coloured block with a hard edge.
+- **In the history, the timestamp aligns with the first line** of its dictation
+  rather than floating at the vertical centre of a multi-line entry.
+
+### Changed — setup wizard
+
+- The progress bar moved to the top edge, full width: under the step text it
+  read as a stray underline rather than as progress.
+- Step content sits in a panel, and the navigation buttons have a footer with
+  breathing room instead of being pressed against the window edge.
+
+### Tests
+
+369 -> 381. New coverage pins the opt-in border rule and the palette, so the
+defect that caused the loose lines cannot come back unnoticed.
+
 ## v1.4.0 — Dictation experience and design system
 
 ### Fixed — words broken apart
